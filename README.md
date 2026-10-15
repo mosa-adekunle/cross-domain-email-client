@@ -114,7 +114,7 @@ Incoming messages should be stored durably before acknowledging delivery and pro
 
 ## Hosting plan and migration strategy (October 2026)
 
-Our cost-first strategy is to **start on AWS EC2 `t4g.small` (2 GB RAM) during eligible free-trial compute hours through December 31, 2026**, then migrate to **AWS Lightsail Micro, dual-stack IPv4 + IPv6 (1 GB RAM, currently US$7/month)** if memory testing confirms the application can run reliably there. If it requires 2 GB, compare the Lightsail Small bundle (currently US$12/month).
+Our cost-first strategy is to **start on AWS EC2 `t4g.small` (2 GB RAM) during eligible free-trial compute hours through December 31, 2026**, then compare hosting costs across **AWS Lightsail, Microsoft Azure, and Google Cloud**. Lightsail Micro, dual-stack IPv4 + IPv6 (1 GB RAM, currently US$7/month), is a possible destination **only if performance tests confirm it is sufficient**. The destination will be selected by total recurring cost, compatibility, and reliability, not provider loyalty.
 
 - **Separate infrastructure:** Terraform configurations and state for EC2 and Lightsail must stay independent of ReceiptBoss and one another.
 - **Portable app:** Run the same Laravel, React, PostgreSQL, and Docker Compose deployment on either platform; accommodate ARM64 versus the target server architecture.
@@ -123,7 +123,7 @@ Our cost-first strategy is to **start on AWS EC2 `t4g.small` (2 GB RAM) during e
 - **No early EC2 deletion:** Keep the source host and its backups until the destination is verified.
 - **Budget:** Trial EC2 compute may be free within the shared allowance, but EBS, public IPv4, backups, R2, and outbound email can incur charges.
 
-See [hosting and migration design](docs/hosting-migration-plan.md) for the detailed plan. **This is an intended deployment sequence, not a completed migration or guarantee of zero downtime/data loss.** All provider costs and trial usage will be verified before any `terraform apply`.
+See the [cloud portability requirements](docs/cloud-portability.md) and [EC2-to-Lightsail migration design](docs/hosting-migration-plan.md) for our deployment constraints and migration procedure. **This is an intended deployment sequence, not a completed migration or guarantee of zero downtime/data loss.** All provider costs and trial usage will be verified before any `terraform apply`.
 
 ## Suggested repository structure
 
