@@ -1,6 +1,8 @@
-# EC2 to Lightsail migration plan
+# EC2 to Lightsail migration plan (optional destination)
 
 **Status:** Architecture plan, not yet tested or executed. Record actual verified commands separately as infrastructure work progresses.
+
+**Cloud choice is not fixed:** This document covers the Lightsail route only. After the EC2 compute trial, compare the actual all-in costs of Lightsail, Microsoft Azure, and Google Cloud. The same Laravel/React/PostgreSQL/Docker application and R2 archive must support migration to whichever provider is selected. See [cloud portability requirements](cloud-portability.md).
 
 ## Goal
 
@@ -23,6 +25,10 @@ Begin on an EC2 `t4g.small` in AWS Ohio (`us-east-2`), using eligible T4g trial 
 - The outbound email provider is external to the instance, with a persistent sent-message ledger; pause outbound queues during migration to avoid duplicate sends.
 
 ## Terraform repository organization
+
+The directory layout below describes the AWS-to-Lightsail implementation only. Provider-specific Azure VM and Google Compute Engine roots may be added later; infrastructure state must remain independent per target.
+
+
 
 ```text
 infrastructure/
