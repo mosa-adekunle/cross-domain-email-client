@@ -112,6 +112,20 @@ Incoming messages should be stored durably before acknowledging delivery and pro
 - [ ] Optional AI-assisted email summaries and reply drafts.
 - [ ] Consider IMAP compatibility only if external mail clients are needed.
 
+## Selected initial hosting plan (October 2026)
+
+- **Platform:** Amazon Lightsail, Linux/Ubuntu, managed with Terraform.
+- **Plan:** Micro, **IPv6-only**, approximately **US$5/month** at the published plan rate.
+- **Included resources:** 1 GB RAM, 2 vCPUs, 40 GB SSD, and 2 TB monthly transfer allowance.
+- **Region:** AWS Ohio (`us-east-2`), subject to confirming the blueprint and bundle availability.
+- **Operations:** One application server; Laravel, optimized PostgreSQL, and built React assets; no separate staging server or domain.
+- **Terraform execution:** Temporarily from the existing `receiptboss-dev` server; separate infrastructure configuration and state.
+- **Scale-up:** Move to a larger Lightsail bundle or storage configuration when workload measurements warrant it, with a backup and a planned migration/restart.
+
+**IPv6-only caveat:** There is no public IPv4 address. Before launching, verify IPv6 access from the management environment, browser access (with Cloudflare proxy support if needed), and outbound connectivity to required deployment, package, container, and email services. IPv4-only endpoints may require an architecture adjustment. Publishing an email app publicly does not mean opening inbound SMTP; Cloudflare Email Routing receives messages separately.
+
+**Budget caveat:** US$5/month is the base Lightsail instance price, not an all-inclusive operational cost. Snapshots, backups, additional storage, outbound email services, usage beyond plan allowances, and taxes can add charges. Infrastructure remains a proposal until Terraform is validated and explicitly applied.
+
 ## Suggested repository structure
 
 ```text
