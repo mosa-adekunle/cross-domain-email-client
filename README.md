@@ -112,19 +112,18 @@ Incoming messages should be stored durably before acknowledging delivery and pro
 - [ ] Optional AI-assisted email summaries and reply drafts.
 - [ ] Consider IMAP compatibility only if external mail clients are needed.
 
-## Selected initial hosting plan (October 2026)
+## Hosting plan and migration strategy (October 2026)
 
-- **Platform:** Amazon Lightsail, Linux/Ubuntu, managed with Terraform.
-- **Plan:** Micro, **IPv6-only**, approximately **US$5/month** at the published plan rate.
-- **Included resources:** 1 GB RAM, 2 vCPUs, 40 GB SSD, and 2 TB monthly transfer allowance.
-- **Region:** AWS Ohio (`us-east-2`), subject to confirming the blueprint and bundle availability.
-- **Operations:** One application server; Laravel, optimized PostgreSQL, and built React assets; no separate staging server or domain.
-- **Terraform execution:** Temporarily from the existing `receiptboss-dev` server; separate infrastructure configuration and state.
-- **Scale-up:** Move to a larger Lightsail bundle or storage configuration when workload measurements warrant it, with a backup and a planned migration/restart.
+Our cost-first strategy is to **start on AWS EC2 `t4g.small` (2 GB RAM) during eligible free-trial compute hours through December 31, 2026**, then migrate to **AWS Lightsail Micro, dual-stack IPv4 + IPv6 (1 GB RAM, currently US$7/month)** if memory testing confirms the application can run reliably there. If it requires 2 GB, compare the Lightsail Small bundle (currently US$12/month).
 
-**IPv6-only caveat:** There is no public IPv4 address. Before launching, verify IPv6 access from the management environment, browser access (with Cloudflare proxy support if needed), and outbound connectivity to required deployment, package, container, and email services. IPv4-only endpoints may require an architecture adjustment. Publishing an email app publicly does not mean opening inbound SMTP; Cloudflare Email Routing receives messages separately.
+- **Separate infrastructure:** Terraform configurations and state for EC2 and Lightsail must stay independent of ReceiptBoss and one another.
+- **Portable app:** Run the same Laravel, React, PostgreSQL, and Docker Compose deployment on either platform; accommodate ARM64 versus the target server architecture.
+- **Durable mail:** Cloudflare Email Routing/Worker archives incoming raw email to private R2 before acknowledgment. PostgreSQL stores metadata and can replay unprocessed R2 messages idempotently.
+- **Data-safe migration:** Run verified off-host backups and a controlled, read-only database transfer. Keep receiving email through Cloudflare during a short application cutover window, verify the restore and replay, then switch the dashboard origin.
+- **No early EC2 deletion:** Keep the source host and its backups until the destination is verified.
+- **Budget:** Trial EC2 compute may be free within the shared allowance, but EBS, public IPv4, backups, R2, and outbound email can incur charges.
 
-**Budget caveat:** US$5/month is the base Lightsail instance price, not an all-inclusive operational cost. Snapshots, backups, additional storage, outbound email services, usage beyond plan allowances, and taxes can add charges. Infrastructure remains a proposal until Terraform is validated and explicitly applied.
+See [hosting and migration design](docs/hosting-migration-plan.md) for the detailed plan. **This is an intended deployment sequence, not a completed migration or guarantee of zero downtime/data loss.** All provider costs and trial usage will be verified before any `terraform apply`.
 
 ## Suggested repository structure
 
