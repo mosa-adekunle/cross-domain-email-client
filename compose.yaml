@@ -39,8 +39,12 @@ services:
       DB_DATABASE: ${POSTGRES_DB}
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-      CACHE_STORE: array
-      SESSION_DRIVER: array
+      CACHE_STORE: database
+      SESSION_DRIVER: database
+      SESSION_CONNECTION: pgsql
+      SESSION_COOKIE: cdec_session
+      SESSION_LIFETIME: "120"
+      SESSION_SECURE_COOKIE: "false" # SSH tunnel only, require true with HTTPS
       QUEUE_CONNECTION: sync
     depends_on:
       db:
