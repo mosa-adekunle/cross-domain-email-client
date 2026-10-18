@@ -1,11 +1,13 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\MailSetupController;
+use App\Http\Controllers\MessageListController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
-// Infrastructure status contains no user, mailbox, or message data.
+// No mailbox, account, or message data is included in this anonymous endpoint.
 Route::get('/status', function (): JsonResponse {
     try {
         DB::select('SELECT 1');
@@ -16,8 +18,8 @@ Route::get('/status', function (): JsonResponse {
     }
 });
 
-// API routes are same-origin browser calls; Laravel's 'web' group enables
-// database sessions, encrypted cookies, and CSRF checks on mutations.
+// All mailbox data is restricted to the authenticated administrator session.
+// The web middleware group applies cookies, database sessions and CSRF checks.
 Route::middleware('web')->group(function (): void {
     Route::get('/auth/csrf', [AuthController::class, 'csrf']);
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
@@ -25,14 +27,10 @@ Route::middleware('web')->group(function (): void {
     Route::middleware('auth:web')->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
-        Route::get('/mailboxes', function (): JsonResponse {
-            // Read-only until mailbox setup and ownership rules are implemented.
-            return response()->json([
-                'mailboxes' => DB::table('mailboxes')
-                    ->select('id', 'address', 'display_name', 'is_active')
-                    ->orderBy('address')
-                    ->get(),
-            ])->header('Cache-Control', 'no-store');
-        });
+        Route::get('/domains', [MailSetupController::class, 'domains']);
+        Route::post('/domains', [MailSetupController::class, 'addDomain'])->middleware('throttle:20,1');
+        Route::get('/mailboxes', [MailSetupController::class, 'mailboxes']);
+        Route::post('/mailboxes', [MailSetupController::class, 'addMailbox'])->middleware('throttle:20,1');
+        Route::get('/messages', [MessageListController::class, 'index']);
     });
 });
