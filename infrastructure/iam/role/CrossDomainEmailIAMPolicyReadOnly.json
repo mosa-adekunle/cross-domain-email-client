@@ -1,0 +1,28 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadCrossDomainEmailTerraformRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:ListRolePolicies",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": "arn:aws:iam::234768038939:role/cross-domain-email-terraform-role"
+    },
+    {
+      "Sid": "ReadManagedPolicyDocuments",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion"
+      ],
+      "Resource": [
+        "arn:aws:iam::234768038939:policy/*",
+        "arn:aws:iam::aws:policy/*"
+      ]
+    }
+  ]
+}
