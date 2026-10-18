@@ -15,10 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         App\Console\Commands\CreateAdmin::class,
         App\Console\Commands\ResetAdminPassword::class,
+        App\Console\Commands\SyncR2Mail::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
-        // Browser-based authentication is enabled on API routes via the 'web'
-        // middleware group, with session cookies and CSRF enforcement.
+        // Browser-based authentication uses database sessions and CSRF checks.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
