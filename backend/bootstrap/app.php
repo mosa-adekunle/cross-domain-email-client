@@ -12,8 +12,13 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withCommands([
+        App\Console\Commands\CreateAdmin::class,
+        App\Console\Commands\ResetAdminPassword::class,
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
-        // Authentication and authorization will be added before exposing mail APIs.
+        // Browser-based authentication is enabled on API routes via the 'web'
+        // middleware group, with session cookies and CSRF enforcement.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
