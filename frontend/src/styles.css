@@ -62,3 +62,48 @@ h1 { font-size: 35px; font-weight: 750; letter-spacing: -1.1px; margin: 13px 0; 
 .signout-button:hover { background: #f1f5fb; }
 .floating-error { position: fixed; right: 25px; bottom: 25px; z-index: 10; }
 @media (max-width: 760px) { .auth-card { padding: 28px 20px; } .topbar-actions { gap: 6px; } .api-pill { padding: 6px; } }
+
+/* Domain and mailbox setup */
+.mailbox-label { padding-top: 29px; }
+.mailbox-nav { gap: 3px; max-height: 38vh; overflow-y: auto; }
+.mailbox-link { border: 0; background: transparent; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 8px; padding: 10px 15px; color: #aebfdb; font-size: 12px; }
+.mailbox-link:hover, .mailbox-link.selected { background: #213455; color: white; }
+.sidebar-hint { padding: 8px 15px; color: #7e94b9; font-size: 11px; }
+.settings-layout { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+.settings-card { border: 1px solid #e4e9f2; background: white; border-radius: 13px; padding: 24px; min-width: 0; }
+.settings-heading { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+.settings-card h2 { margin: 0; font-size: 17px; }
+.settings-card h3 { margin: 27px 0 12px; font-size: 14px; }
+.settings-card p { color: #687a97; line-height: 1.65; font-size: 12px; }
+.setup-status { display: inline-block; flex: none; border-radius: 7px; background: #edf2ff; color: #4b66a4; padding: 7px 9px; font-size: 10px; font-weight: 700; }
+.setup-form { margin-top: 23px; display: grid; gap: 10px; }
+.setup-form label { font-size: 12px; font-weight: 680; }
+.setup-form input, .setup-form select { width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid #cbd6e6; border-radius: 8px; font-size: 13px; background: white; color: #1c2d4a; }
+.setup-form input:focus, .setup-form select:focus { outline: 2px solid #6f92ed; outline-offset: 1px; }
+.setup-form input:disabled, .setup-form select:disabled { opacity: .55; cursor: not-allowed; }
+.setup-form .primary-button { justify-self: start; margin-top: 7px; white-space: nowrap; }
+.form-line { display: flex; gap: 10px; align-items: center; }
+.form-line .primary-button { margin-top: 0; }
+.configuration-list { list-style: none; margin: 0; padding: 0; }
+.configuration-list li { display: flex; align-items: center; justify-content: space-between; gap: 15px; border-top: 1px solid #edf1f7; padding: 14px 0; }
+.configuration-list li div { min-width: 0; }
+.configuration-list li strong { display: block; color: #1b2c48; font-size: 12px; overflow-wrap: anywhere; }
+.configuration-list li small { display: block; color: #8797ac; margin-top: 5px; font-size: 11px; }
+.muted { color: #7c8ca6; }
+.form-alert { grid-column: 1 / -1; border-radius: 9px; padding: 12px 15px; font-size: 12px; }
+.form-alert.error { background: #fff0f0; border: 1px solid #f1b7b7; color: #9b2c2c; }
+.form-alert.success { background: #e8f9f1; border: 1px solid #a2dcc2; color: #15704c; }
+.settings-layout > .notice { grid-column: 1 / -1; margin: 0; }
+.message-list { width: 100%; }
+.message-row { display: grid; grid-template-columns: minmax(145px, 25%) minmax(0, 1fr) auto; gap: 19px; padding: 17px 24px; border-top: 1px solid #edf1f6; align-items: center; font-size: 12px; }
+.message-row.unread { background: #f9fbff; }
+.message-row strong { font-weight: 720; }
+.message-row small { display: block; margin-top: 5px; color: #8694a9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.message-summary, .message-sender { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-row time { color: #8392a8; font-size: 11px; }
+.pagination { border-top: 1px solid #edf1f6; padding: 14px 20px; display: flex; justify-content: flex-end; align-items: center; gap: 14px; font-size: 12px; }
+.pagination button { background: white; color: #35588f; border: 1px solid #d3deec; border-radius: 7px; padding: 7px 12px; }
+.pagination button:disabled { opacity: .4; cursor: not-allowed; }
+@media (max-width: 960px) { .settings-layout { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .mailbox-label, .mailbox-nav { display: none; } .settings-card { padding: 20px; } .settings-heading { flex-wrap: wrap; } .message-row { grid-template-columns: 1fr auto; gap: 10px; } .message-summary { grid-column: 1 / -1; grid-row: 2; } .message-row time { grid-column: 2; grid-row: 1; } }
+@media (max-width: 420px) { .form-line { flex-direction: column; align-items: stretch; } .form-line .primary-button { width: 100%; } }
