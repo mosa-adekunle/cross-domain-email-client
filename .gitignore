@@ -1,0 +1,29 @@
+# Terraform work directories and local state
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/crash.log
+**/crash.*.log
+**/override.tf
+**/override.tf.json
+**/*_override.tf
+**/*_override.tf.json
+**/*.tfvars
+**/*.tfvars.json
+**/backend.hcl
+**/admin-ssh.pub
+**/*.pem
+**/*.key
+**/id_rsa
+**/id_ed25519
+
+# Environment credentials and runtime data
+.env
+.env.*
+!.env.example
+*.sqlite
+*.log
+node_modules/
+vendor/
+.DS_Store
