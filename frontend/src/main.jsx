@@ -1,14 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import Workspace from './Workspace.jsx';
 
-const folders = [
-  { label: 'Unified inbox', icon: '▤' },
-  { label: 'Sent', icon: '↗' },
-  { label: 'Drafts', icon: '▱' },
-  { label: 'Archive', icon: '▣' },
-  { label: 'Settings', icon: '⚙' },
-];
 
 async function apiRequest(path, options = {}) {
   const { headers, ...requestOptions } = options;
@@ -60,69 +54,13 @@ function Login({ onLogin, busy, error }) {
   );
 }
 
-function Workspace({ user, onLogout, signingOut }) {
-  const [activeFolder, setActiveFolder] = useState('Unified inbox');
-  const [api, setApi] = useState({ status: 'checking', database: 'checking' });
-  const [mailboxes, setMailboxes] = useState([]);
-  const [mailboxError, setMailboxError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    apiRequest('/status').then((data) => { if (active) setApi(data); })
-      .catch(() => { if (active) setApi({ status: 'unavailable', database: 'unavailable' }); });
-    apiRequest('/mailboxes').then((data) => { if (active) setMailboxes(data.mailboxes || []); })
-      .catch((error) => { if (active) setMailboxError(error.status === 401 ? 'Session expired. Refresh to sign in again.' : 'Unable to load mailboxes.'); });
-    return () => { active = false; };
-  }, []);
-
-  const isReady = api.status === 'ready';
-  return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="identity"><div className="brand-icon">✉</div><div><div className="brand-name">Cross Domain</div><div className="brand-subtitle">Email client</div></div></div>
-        <div className="section-label">WORKSPACE</div>
-        <nav aria-label="Mail folders">
-          {folders.map((folder) => (
-            <button key={folder.label} type="button" className={`nav-link ${activeFolder === folder.label ? 'selected' : ''}`} onClick={() => setActiveFolder(folder.label)}>
-              <span aria-hidden="true">{folder.icon}</span><span>{folder.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom"><div className="server-dot" /><span>Signed in as {user.name}</span></div>
-      </aside>
-      <div className="main">
-        <header className="topbar">
-          <div className="breadcrumb">Email <span>/</span> {activeFolder}</div>
-          <div className="topbar-actions">
-            <div className={`api-pill ${isReady ? 'ready' : ''}`} role="status"><span className="server-dot" />{isReady ? 'API connected' : api.status === 'checking' ? 'Checking API' : 'API unavailable'}</div>
-            <button className="signout-button" type="button" onClick={onLogout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>
-          </div>
-        </header>
-        <main className="content">
-          <p className="eyebrow">SECURE WORKSPACE</p>
-          <h1>{activeFolder}</h1>
-          <p className="intro">Administrator authentication is enabled. Mailbox schema is ready; receiving and sending integrations are not connected yet.</p>
-          <section className="panel" aria-label="Workspace status">
-            <div className="panel-top"><div><h2>{mailboxes.length ? `${mailboxes.length} configured mailbox${mailboxes.length === 1 ? '' : 'es'}` : 'No messages yet'}</h2><p>{mailboxError || 'Connect a domain and mailbox in a future setup step to begin receiving mail.'}</p></div><span className="label">Setup in progress</span></div>
-            <div className="empty"><div className="empty-icon">✉</div><h3>Mailboxes are secured</h3><p>Messages will appear here after Cloudflare R2 ingestion and mailbox APIs are implemented.</p></div>
-          </section>
-          <div className="status-grid">
-            <div className="status-card"><div>Laravel API</div><strong>{api.status}</strong><span>Backend service health</span></div>
-            <div className="status-card"><div>PostgreSQL</div><strong>{api.database}</strong><span>Private persistent database</span></div>
-            <div className="status-card"><div>Administrator access</div><strong>Secured</strong><span>Database session and CSRF protection</span></div>
-          </div>
-          <p className="notice">This is an authenticated setup preview. No domain MX records, incoming email, or sending providers have been activated.</p>
-        </main>
-      </div>
-    </div>
-  );
-}
 
 function App() {
   const [user, setUser] = useState(undefined);
   const [csrf, setCsrf] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const expireSession = useCallback(() => setUser(null), []);
 
   const renewCsrf = async () => {
     const data = await apiRequest('/auth/csrf');
@@ -182,7 +120,7 @@ function App() {
 
   if (user === undefined) return <div className="auth-layout"><div className="auth-card"><p role="status">Checking administrator session…</p></div></div>;
   if (!user) return <Login onLogin={login} busy={busy} error={error} />;
-  return <><Workspace user={user} onLogout={logout} signingOut={busy} />{error && <div className="floating-error" role="alert">{error}</div>}</>;
+  return <><Workspace user={user} csrf={csrf} onLogout={logout} signingOut={busy} onExpired={expireSession} />{error && <div className="floating-error" role="alert">{error}</div>}</>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
