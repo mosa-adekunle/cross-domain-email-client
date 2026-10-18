@@ -1,0 +1,198 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadEC2InOhio",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "ec2:GetEbsEncryptionByDefault",
+        "ec2:GetEbsDefaultKmsKeyId"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-2"
+        }
+      }
+    },
+    {
+      "Sid": "CreateSecurityGroupInExistingVpc",
+      "Effect": "Allow",
+      "Action": "ec2:CreateSecurityGroup",
+      "Resource": [
+        "arn:aws:ec2:us-east-2:234768038939:vpc/vpc-07aaea246f8683096",
+        "arn:aws:ec2:us-east-2:234768038939:security-group/*"
+      ]
+    },
+    {
+      "Sid": "ImportProjectKey",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:ImportKeyPair",
+        "ec2:DeleteKeyPair"
+      ],
+      "Resource": "arn:aws:ec2:us-east-2:234768038939:key-pair/cross-domain-email-*"
+    },
+    {
+      "Sid": "LaunchAllowedDependencies",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": [
+        "arn:aws:ec2:us-east-2::image/ami-0d15ab36445910233",
+        "arn:aws:ec2:us-east-2:234768038939:subnet/subnet-0285d94b63fcf8219",
+        "arn:aws:ec2:us-east-2:234768038939:network-interface/*",
+        "arn:aws:ec2:us-east-2:234768038939:security-group/*",
+        "arn:aws:ec2:us-east-2:234768038939:key-pair/cross-domain-email-*",
+        "arn:aws:ec2:us-east-2:234768038939:volume/*"
+      ]
+    },
+    {
+      "Sid": "LaunchOnlyTaggedT4gSmall",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": "arn:aws:ec2:us-east-2:234768038939:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "ec2:InstanceType": "t4g.small",
+          "aws:RequestTag/Project": "cross-domain-email-client"
+        }
+      }
+    },
+    {
+      "Sid": "TagOnlyDuringProjectResourceCreation",
+      "Effect": "Allow",
+      "Action": "ec2:CreateTags",
+      "Resource": "arn:aws:ec2:us-east-2:234768038939:*/*",
+      "Condition": {
+        "StringEquals": {
+          "ec2:CreateAction": [
+            "RunInstances",
+            "CreateSecurityGroup",
+            "ImportKeyPair",
+            "AllocateAddress",
+            "AuthorizeSecurityGroupIngress",
+            "AuthorizeSecurityGroupEgress"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "UpdateProjectResourceTags",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
+      ],
+      "Resource": [
+        "arn:aws:ec2:us-east-2:234768038939:instance/*",
+        "arn:aws:ec2:us-east-2:234768038939:security-group/*",
+        "arn:aws:ec2:us-east-2:234768038939:elastic-ip/*",
+        "arn:aws:ec2:us-east-2:234768038939:volume/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "cross-domain-email-client"
+        }
+      }
+    },
+    {
+      "Sid": "ManageTaggedProjectSecurityGroups",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:DeleteSecurityGroup"
+      ],
+      "Resource": "arn:aws:ec2:us-east-2:234768038939:security-group/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "cross-domain-email-client"
+        }
+      }
+    },
+    {
+      "Sid": "ManageSecurityGroupRuleResources",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupEgress"
+      ],
+      "Resource": "arn:aws:ec2:us-east-2:234768038939:security-group-rule/*"
+    },
+    {
+      "Sid": "AllocateTaggedProjectAddress",
+      "Effect": "Allow",
+      "Action": "ec2:AllocateAddress",
+      "Resource": "arn:aws:ec2:us-east-2:234768038939:elastic-ip/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Project": "cross-domain-email-client"
+        }
+      }
+    },
+    {
+      "Sid": "AssociateTaggedProjectAddresses",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AssociateAddress",
+        "ec2:DisassociateAddress"
+      ],
+      "Resource": [
+        "arn:aws:ec2:us-east-2:234768038939:elastic-ip/*",
+        "arn:aws:ec2:us-east-2:234768038939:instance/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "cross-domain-email-client"
+        }
+      }
+    },
+    {
+      "Sid": "ReleaseTaggedProjectAddress",
+      "Effect": "Allow",
+      "Action": "ec2:ReleaseAddress",
+      "Resource": "arn:aws:ec2:us-east-2:234768038939:elastic-ip/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "cross-domain-email-client"
+        }
+      }
+    },
+    {
+      "Sid": "ManageTaggedProjectInstance",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:StartInstances",
+        "ec2:StopInstances",
+        "ec2:TerminateInstances",
+        "ec2:ModifyInstanceAttribute",
+        "ec2:ModifyInstanceMetadataOptions"
+      ],
+      "Resource": "arn:aws:ec2:us-east-2:234768038939:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "cross-domain-email-client"
+        }
+      }
+    },
+    {
+      "Sid": "ModifyTaggedProjectVolumes",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:ModifyVolume",
+        "ec2:DeleteVolume"
+      ],
+      "Resource": "arn:aws:ec2:us-east-2:234768038939:volume/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "cross-domain-email-client"
+        }
+      }
+    }
+  ]
+}
