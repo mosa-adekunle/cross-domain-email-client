@@ -46,6 +46,10 @@ services:
       SESSION_LIFETIME: "120"
       SESSION_SECURE_COOKIE: "false" # SSH tunnel only, require true with HTTPS
       QUEUE_CONNECTION: sync
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
     depends_on:
       db:
         condition: service_healthy
