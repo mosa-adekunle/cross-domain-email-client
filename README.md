@@ -157,6 +157,98 @@ The source repository is public, but email data, configuration, and credentials 
 
 Develop locally, store code in GitHub, test changes, then deploy to the **single production environment**. Production should support controlled Laravel migrations, application/container restarts, health checks, and recovery. No separate staging infrastructure is planned.
 
+## Deployed AWS infrastructure, Terraform, and IAM (verified October 18, 2026)
+
+The **single production EC2 server is provisioned**, reachable by SSH, and has a working Docker Engine and Docker Compose installation. The **email application itself has not yet been implemented or deployed**. Cloudflare Email Routing/Workers, R2, Laravel, React, and PostgreSQL remain upcoming work. The project uses a single production server and keeps its raw-email archive independent of the VM for migration and recovery.
+
+### Live AWS deployment
+
+| Component | Deployed configuration |
+| --- | --- |
+| Account and region | `234768038939`, `us-east-2` (Ohio) |
+| EC2 | `i-0cdc14756641487d3`, `t4g.small` (ARM64, 2 vCPU, 2 GiB memory) |
+| AMI and OS | Ubuntu 24.04.5 LTS (`aarch64`); Terraform selects latest Canonical Ubuntu 24.04 arm64 AMI |
+| Storage | Encrypted 16 GiB gp3 EBS root volume; `delete_on_termination = true` |
+| VPC / subnet | Default VPC `vpc-07aaea246f8683096`; subnet `subnet-0285d94b63fcf8219`; private IP `172.31.2.3` |
+| Elastic IP | `52.14.33.209`, allocation `eipalloc-06b4ed2019474dcb3` |
+| Security group | `sg-04b2fdedc5edcff95`; inbound TCP/22 from `0.0.0.0/0`, all IPv4 outbound |
+| HTTP/HTTPS | 80/443 not yet added to the project security group; PostgreSQL must remain private |
+| SSH | From a Mac: `ssh cross-domain-email`; private key remains on the Mac at `~/.ssh/cross-domain-email` |
+| Docker | Engine 29.9.1, Compose v5.6.0, successful ARM64 `hello-world` verification |
+| Terraform execution host | Existing `receiptboss-dev` EC2 VM (runner only); **not** the application host |
+
+The existing open-to-world SSH rule is documented, **not recommended as the final firewall configuration**. Narrow it to trusted sources or use SSM when access patterns allow. Neither `receiptboss-dev` nor the email application server should be used as an alternative Terraform backend without explicitly initializing and verifying the existing remote state.
+
+### Checked-in source and remote Terraform state
+
+The following Terraform source directories are proposed for the public GitHub repository after review:
+
+- [`infrastructure/terraform/bootstrap/`](infrastructure/terraform/bootstrap/) provisions the private, versioned, SSE-S3 `AES256` state bucket, public-access blocking, HTTPS-only bucket policy, and `prevent_destroy` protection.
+- [`infrastructure/terraform/aws-ec2/`](infrastructure/terraform/aws-ec2/) defines the EC2 instance, ED25519 SSH key resource, security group/rules, and Elastic IP. It uses the existing default VPC and a Canonical Ubuntu 24.04 ARM64 AMI data source.
+- [`infrastructure/iam/role/`](infrastructure/iam/role/) contains **exported snapshots** of the IAM trust document and five currently configured inline policy JSON documents. These files document existing AWS IAM configuration. **They are not yet managed by Terraform**, and editing a JSON snapshot does not alter permissions in AWS.
+
+Terraform runtime on the original runner was `1.16.6`; root configurations require `>= 1.10.0, < 2.0.0` and `hashicorp/aws ~> 6.0`. The exported source did not include `.terraform.lock.hcl`, `admin-ssh.pub`, or backend initialization arguments. Preserve the original private inputs and copy reviewed provider lock files separately before running Terraform from a different host.
+
+| State concern | Live configuration |
+| --- | --- |
+| S3 bucket | `cdec-tfstate-234768038939-us-east-2` |
+| State region | `us-east-2` |
+| Bootstrap state key | `bootstrap/terraform.tfstate` |
+| EC2 state key | `cross-domain-email/aws-ec2/terraform.tfstate` |
+| Locking | S3 lock file: `use_lockfile = true` |
+| State safeguards | S3 versioning, SSE-S3, block public access, deny non-TLS, `force_destroy = false`, `prevent_destroy = true` |
+
+The application EC2 instance has:
+
+```hcl
+associate_public_ip_address = false
+
+lifecycle {
+  prevent_destroy = true
+  ignore_changes  = [ami, associate_public_ip_address]
+}
+```
+
+The `ignore_changes` on `associate_public_ip_address` resolves an AWS provider drift after attaching the separately managed Elastic IP without replacing the live instance. Keep the lifecycle protection intact. EC2 CPU credits are `standard`; IMDSv2 is required; cloud-init disables root login, password authentication, and keyboard-interactive authentication. `terraform validate` succeeded and the last `terraform plan` reported **No changes**.
+
+**Safety:** State, lock files, private keys, `.tfvars`, generated plans, `backend.hcl`, application `.env`, credentials, backups, and raw email never belong in public GitHub. The original `admin-ssh.pub` input is runner-local, and **must not be silently replaced** with the dedicated key installed later through EC2 Instance Connect; a key-pair input change can trigger unwanted infrastructure replacement. Verify the original S3 backend before any plan or apply and do not remove `prevent_destroy`.
+
+The existing Terraform runner uses:
+
+```bash
+ssh receiptboss-dev
+cd ~/cross-domain-email-client/infrastructure/terraform/aws-ec2
+export AWS_PROFILE=cross-domain-email-terraform
+aws sts get-caller-identity
+terraform fmt -check
+terraform validate
+terraform plan
+```
+
+Application access is separately via `ssh cross-domain-email`. Do not install application containers on `receiptboss-dev`.
+
+### AWS IAM role and exact policies (exported October 18, 2026)
+
+The role `arn:aws:iam::234768038939:role/cross-domain-email-terraform-role` is assumed from `receiptboss-dev` using AWS CLI profile `cross-domain-email-terraform`. The **live exported trust policy** allows only principal `arn:aws:iam::234768038939:role/receiptboss-dev-ec2-role` to call `sts:AssumeRole`; see [`trust-policy.json`](infrastructure/iam/role/trust-policy.json).
+
+All **five** exported policies are **inline policies on that role**, and AWS returned **no attached managed policies**. The policy documents below are the exact exported JSON snapshots, not guessed replacements:
+
+| Inline policy | Verified permissions summary |
+| --- | --- |
+| [`cross-domain-email-terraform-rolePolicy`](infrastructure/iam/role/cross-domain-email-terraform-rolePolicy.json) | EC2 resource-discovery `Describe*` actions for VPC, instances, images, subnets, networking, key pairs, EBS volumes, and related attributes |
+| [`CrossDomainEmailEC2Provisioning`](infrastructure/iam/role/CrossDomainEmailEC2Provisioning.json) | Region-scoped EC2 discovery; allowed project-tagged `t4g.small` instance and network/key/EBS resources; security-group and SG-rule changes; tags; Elastic IP allocation/association; project instance/volume management |
+| [`CrossDomainEmailIAMPolicyReadOnly`](infrastructure/iam/role/CrossDomainEmailIAMPolicyReadOnly.json) | Inspect own IAM role/trust and inline/attached policy lists and definitions; read account/AWS managed-policy documents |
+| [`CrossDomainEmailInstanceConnect`](infrastructure/iam/role/CrossDomainEmailInstanceConnect.json) | `ec2-instance-connect:SendSSHPublicKey` limited to instance `i-0cdc14756641487d3`, OS user `ubuntu` |
+| [`CrossDomainEmailTerraformS3Access`](infrastructure/iam/role/CrossDomainEmailTerraformS3Access.json) | Access only the Terraform state bucket; object get/put and `.tflock` deletion for S3 backend locking |
+
+**Access scope cautions:** Some discovery calls use `Resource: "*"`; EC2 write access is restricted through combinations of ARNs, project resource/request tags, allowed instance type, and region, as specified in the actual JSON. The provisioning policy's `ec2:RunInstances` image ARN is pinned to the original AMI, so rebuilding with a newer Canonical AMI may require a reviewed IAM update. Some actions can allow management or deletion of project resources even though Terraform's `prevent_destroy` blocks Terraform-managed destruction; IAM itself does not enforce that Terraform lifecycle safeguard. Review the exported policies and applicable AWS account boundaries before treating them as a security guarantee.
+
+The IAM policy JSON files are **documentation snapshots** and should not be fed blindly into `terraform apply`. Avoid embedding AWS credentials or SSH private keys in the repository. Role inspection completed without `AccessDenied` after adding `CrossDomainEmailIAMPolicyReadOnly`.
+
+### Project and publication workflow
+
+The repository is currently public. Before any GitHub commit or push, review source changes explicitly and give approval. No application files have been deployed yet, no IAM role resources are managed by this Terraform source, and no additional cloud resources should be provisioned merely by publishing these files.
+
 ## License
 
 No open-source license has been selected yet. Public source visibility does not itself grant permission for unrestricted reuse, modification, or redistribution.
