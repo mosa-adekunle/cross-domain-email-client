@@ -1,0 +1,12 @@
+{
+  "name": "cdec-inbound-archive",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-18",
+  "workers_dev": false,
+  "r2_buckets": [
+    { "binding": "MAIL_ARCHIVE", "bucket_name": "cdec-inbound-mail" }
+  ],
+  "vars": {
+    "ALLOWED_RECIPIENTS": ""
+  }
+}
