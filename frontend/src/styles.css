@@ -42,3 +42,23 @@ h1 { font-size: 35px; font-weight: 750; letter-spacing: -1.1px; margin: 13px 0; 
 .status-card span { color: #8a98ac; font-size: 11px; }
 .notice { margin-top: 27px; font-size: 12px; line-height: 1.65; color: #8793a6; }
 @media (max-width: 760px) { .shell { display: block; } .sidebar { padding: 15px; } .identity { padding: 0 0 16px; } .section-label, .sidebar-bottom { display: none; } nav { grid-template-columns: repeat(5,minmax(0,1fr)); } .nav-link { flex-direction: column; text-align: center; gap: 4px; padding: 8px 3px; font-size: 9px; } .topbar { height: 60px; padding: 0 19px; } .content { padding: 27px 18px; } .status-grid { grid-template-columns: 1fr; } .panel-top { flex-direction: column; } h1 { font-size: 28px; } }
+
+
+.auth-layout { min-height: 100vh; background: linear-gradient(135deg, #0d1930, #1b355c); display: grid; place-items: center; padding: 24px; }
+.auth-card { width: 100%; max-width: 440px; background: white; border-radius: 18px; padding: 38px; box-shadow: 0 24px 80px #0003; }
+.auth-brand { padding: 0 0 35px; color: #142444; }
+.auth-card h1 { font-size: 28px; margin-bottom: 12px; }
+.auth-hint { color: #64728a; font-size: 13px; line-height: 1.7; }
+.auth-form { display: grid; gap: 12px; margin-top: 27px; }
+.auth-form label { font-size: 13px; font-weight: 650; }
+.auth-form input { width: 100%; border: 1px solid #cfdaeb; padding: 12px 13px; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
+.auth-form input:focus { outline: 2px solid #638afa; border-color: transparent; }
+.primary-button { background: #3266ef; color: white; border: 0; padding: 13px; border-radius: 9px; font-weight: 700; }
+.primary-button:disabled { opacity: 0.65; cursor: wait; }
+.auth-error, .floating-error { background: #fff0f0; border: 1px solid #f1b7b7; color: #9b2c2c; border-radius: 8px; padding: 11px; font-size: 12px; }
+.auth-footer { font-size: 12px; color: #8795a9; text-align: center; margin-top: 28px; }
+.topbar-actions { display: flex; align-items: center; gap: 15px; }
+.signout-button { border: 1px solid #cbd5e4; background: white; color: #1e375d; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 650; }
+.signout-button:hover { background: #f1f5fb; }
+.floating-error { position: fixed; right: 25px; bottom: 25px; z-index: 10; }
+@media (max-width: 760px) { .auth-card { padding: 28px 20px; } .topbar-actions { gap: 6px; } .api-pill { padding: 6px; } }
