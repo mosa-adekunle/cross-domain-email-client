@@ -27,3 +27,6 @@
 node_modules/
 vendor/
 .DS_Store
+
+# ACME account material and private TLS certificates
+runtime/
