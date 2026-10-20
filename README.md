@@ -247,7 +247,13 @@ The IAM policy JSON files are **documentation snapshots** and should not be fed 
 
 ### Project and publication workflow
 
-The repository is currently public. Before any GitHub commit or push, review source changes explicitly and give approval. No application files have been deployed yet, no IAM role resources are managed by this Terraform source, and no additional cloud resources should be provisioned merely by publishing these files.
+The repository is currently public. Push approved project changes to GitHub and provide deployment commands. The Laravel, React, and PostgreSQL foundation is deployed on its own EC2 server. IAM role resources are documented but are not managed by this Terraform source; publishing source files does not itself provision additional cloud resources.
+
+## Direct EC2-IP HTTPS
+
+The application can be published directly at **https://52.14.33.209** on TCP/443 with a publicly trusted six-day Let's Encrypt IP certificate, using Terraform-managed AWS ingress, Nginx TLS termination, and automatic certificate renewal. It does **not** require Cloudflare Tunnel, DNS, or publicly exposed HTTP/80. The web app remains protected by administrator login, while PostgreSQL is private.
+
+For the **required deployment sequence and renewal setup**, see [Direct IP HTTPS deployment](docs/direct-ip-https.md). Changes are committed to GitHub, but the Terraform ingress rule and EC2 web configuration require separate deployment; merely merging this code does not make the public URL live.
 
 ## License
 
