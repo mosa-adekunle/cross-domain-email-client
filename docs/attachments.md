@@ -6,7 +6,7 @@ Implementation: authenticated React message reader + Laravel attachment endpoint
 
 1. Sign in at https://52.14.33.209 and open a message in the Unified inbox.
 2. An **Attachments** section appears when that email has MIME attachment parts. Each entry shows the filename, declared MIME type and size when available.
-3. Click **Preview** to inspect supported file types in a private overlay; click **Download** to save the original decoded bytes. The attachment section is also shown when the message has no readable text body.
+3. Click **Preview** to inspect supported files in a private overlay; click **Download** to save the original decoded bytes. PDFs are rendered with Mozilla PDF.js into a canvas; the viewer supports page navigation and zoom. It does not embed PDFs in an iframe or depend on a browser PDF extension. The attachment section is also shown when the message has no readable text body.
 
 Inline previews are restricted to JPG, PNG, GIF, WebP, PDF with a matching file signature, and valid UTF-8 plain text/CSV/JSON up to 1 MiB. HTML, SVG, executable files, Office documents, ZIPs and other untrusted formats are **download-only**. Treat all received files as potentially malicious even when their MIME type looks harmless.
 
@@ -41,7 +41,26 @@ No schema migration, Cloudflare Worker redeployment, DNS change, AWS Terraform a
 ## Limitations
 
 - Attachment previews are not antivirus scanning or a guarantee of safe content.
+- PDFs use a lazy-loaded, pinned pdfjs-dist dependency and same-origin Web Worker. PDF.js processes authenticated bytes in-memory (without fetching external assets or exposing R2 credentials). The PDF parser runs with JavaScript evaluation disabled and a bounded canvas raster size. The existing browser PDF iframe was blocked by the application's CSP and iframe sandbox, so it is no longer used.
+- Nginx CSP remains restrictive: `object-src 'none'`, `frame-src 'none'`, `worker-src 'self'`; the necessary `blob:` exception is limited to `img-src` for in-memory validated images. No third-party document viewer or public Cloudflare R2 URLs are enabled.
 - For security, arbitrary HTML, SVG and office documents are not rendered inside the authenticated origin. Download them and open with appropriate software after checking the sender.
 - Large attachments are decoded on demand from the original email; the UI does not cache attachments, and refreshing the reader may fetch the original archived MIME again. For very large mail volumes or shared users, migrate to per-file indexes and dedicated authorized storage endpoints.
 
 PHP MIME parser method references: https://mail-mime-parser.org/api/4.0/classes/ZBateson-MailMimeParser-Message.html and https://mail-mime-parser.org/api/4.0/classes/ZBateson-MailMimeParser-Message-IMessagePart.html .
+## PDF/image preview repair (October 20, 2026)
+
+An original PDF preview used an embedded `<iframe sandbox="allow-downloads">` pointing to an in-memory `blob:` URL. Chrome displayed **"This content is blocked"**, since the site CSP allows only same-origin frames and the PDF plugin is incompatible with that restrictive iframe sandbox. The replacement **PDF.js canvas viewer** eliminates the iframe and preserves the CSP restrictions on embedded content. Nginx also adds `blob:` only to `img-src` to enable safe image blob previews. The PDF worker is served from the same application origin through Vite-generated assets (no third-party request).
+
+**Deploy only the web image** (API, PostgreSQL, Cloudflare Workers and Terraform are unchanged):
+
+```bash
+cd ~/cross-domain-email-client
+git pull --ff-only origin main
+sudo docker compose config --quiet
+sudo docker compose build web
+sudo docker compose up -d --no-deps --force-recreate web
+bash scripts/verify-ip-https.sh
+sudo docker compose ps
+```
+
+Then hard-refresh `https://52.14.33.209/?message=4` and click **Preview** beside `dcc.pdf` and the JPG. PDF navigation uses **Previous/Next** and zoom +/- buttons. If a malformed PDF cannot be rendered, **Download PDF** remains available from the same modal. In Chrome DevTools → Network, verify the PDF worker is loaded from `/assets/`, not from another domain. In DevTools → Console, there should be no Content Security Policy errors for attachment previews.

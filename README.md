@@ -275,3 +275,8 @@ The [one-minute R2 synchronization guide](docs/automatic-r2-sync.md) documents a
 ## Received-email attachments
 
 [View and download archived attachments](docs/attachments.md) adds a private, authenticated attachment list to the email reader. Previously imported `.eml` files are parsed on demand from Cloudflare R2; JPG/PNG/GIF/WebP images, PDFs and safe text can be previewed, and all supported MIME parts can be downloaded without a database migration. HTML and arbitrary binary attachments are download-only. No Terraform/IAM/Worker changes are necessary for this app-only deployment.
+
+
+### Browser attachment preview compatibility
+
+PDFs are rendered locally with [Mozilla PDF.js](https://mozilla.github.io/pdf.js/) instead of Chrome's sandboxed iframe-based PDF plugin. Image previews use validated `blob:` image URLs permitted by the narrowly scoped Nginx `img-src` policy; `object-src` and `frame-src` remain disabled. See [attachments](docs/attachments.md) for the app-only web deployment and troubleshooting steps.

@@ -173,3 +173,22 @@ h1 { font-size: 35px; font-weight: 750; letter-spacing: -1.1px; margin: 13px 0; 
   .attachment-actions { flex: 1 0 100%; justify-content: flex-end; }
   .attachment-modal-overlay { padding: 8px; }
 }
+
+
+/* PDF.js preview: no embedded browser plugin, iframe, or external services. */
+.attachment-modal-header-buttons { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.attachment-pdf-viewer { display: flex; flex: 1; flex-direction: column; min-height: 0; background: #edf1f7; }
+.attachment-pdf-controls { display: flex; flex: none; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; background: #fff; border-bottom: 1px solid #dfe6f1; padding: 11px 15px; font-size: 12px; }
+.attachment-pdf-controls button { background: #fff; border: 1px solid #cbd6eb; border-radius: 6px; padding: 7px 10px; font-size: 12px; color: #2d51ab; }
+.attachment-pdf-controls button:disabled { opacity: .4; cursor: not-allowed; }
+.attachment-pdf-controls button:hover:not(:disabled) { background: #edf2ff; }
+.attachment-pdf-control-spacer { flex: 1; }
+.attachment-pdf-status, .attachment-pdf-error { text-align: center; padding: 15px; font-size: 13px; color: #435573; }
+.attachment-pdf-error { color: #aa3444; }
+.attachment-pdf-canvas-scroll { display: flex; flex: 1; min-height: 0; overflow: auto; padding: 16px; justify-content: safe center; align-items: flex-start; }
+.attachment-pdf-canvas-scroll canvas { display: block; max-width: none; background: white; box-shadow: 0 2px 15px rgb(0 0 0 / 13%); }
+@media (max-width: 760px) {
+  .attachment-pdf-controls { gap: 7px; }
+  .attachment-pdf-control-spacer { flex-basis: 100%; }
+  .attachment-pdf-canvas-scroll { justify-content: flex-start; }
+}

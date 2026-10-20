@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 
+// Load the PDF parser only when someone actually opens a PDF preview.
+const PdfAttachmentPreview = React.lazy(() => import('./PdfAttachmentPreview.jsx'));
+
 export default function MessageReader({ messageId, csrf, onBack, onExpired }) {
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -85,6 +88,13 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired }) {
       previewUrl.current = null;
       if (kind === 'text') {
         setPreview({ filename: file.filename, kind, text: await blob.text() });
+      } else if (kind === 'pdf') {
+        // The old blob: iframe was blocked by the site's strict CSP and
+        // browser PDF-plugin sandbox. Render bytes locally with PDF.js instead.
+        const bytes = await blob.arrayBuffer();
+        if (!controller.signal.aborted) {
+          setPreview({ filename: file.filename, kind, bytes, file });
+        }
       } else {
         const objectUrl = URL.createObjectURL(blob);
         previewUrl.current = objectUrl;
@@ -198,10 +208,17 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired }) {
               <div className="attachment-modal" role="dialog" aria-modal="true" aria-label={'Preview ' + preview.filename}>
                 <div className="attachment-modal-header">
                   <strong>{preview.filename}</strong>
-                  <button type="button" onClick={closePreview} aria-label="Close attachment preview">Close ×</button>
+                  <div className="attachment-modal-header-buttons">
+                    {preview.kind === 'pdf' && <button type="button" onClick={() => getAttachment(preview.file, false)} disabled={attachmentBusy !== null}>Download PDF</button>}
+                    <button type="button" onClick={closePreview} aria-label="Close attachment preview">Close ×</button>
+                  </div>
                 </div>
                 {preview.kind === 'image' && <div className="attachment-image-wrap"><img src={preview.url} alt={preview.filename} /></div>}
-                {preview.kind === 'pdf' && <iframe className="attachment-pdf-frame" src={preview.url} title={preview.filename} sandbox="allow-downloads" />}
+                {preview.kind === 'pdf' && (
+                  <React.Suspense fallback={<div className="attachment-pdf-status">Loading PDF viewer…</div>}>
+                    <PdfAttachmentPreview bytes={preview.bytes} filename={preview.filename} />
+                  </React.Suspense>
+                )}
                 {preview.kind === 'text' && <pre className="attachment-text-preview">{preview.text}</pre>}
               </div>
             </div>
