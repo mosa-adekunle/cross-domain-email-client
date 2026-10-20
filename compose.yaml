@@ -30,7 +30,7 @@ services:
       APP_ENV: production
       APP_DEBUG: "false"
       APP_KEY: ${APP_KEY:?Set APP_KEY in .env}
-      APP_URL: http://localhost:8080
+      APP_URL: https://52.14.33.209
       LOG_CHANNEL: stderr
       LOG_LEVEL: warning
       DB_CONNECTION: pgsql
@@ -44,7 +44,7 @@ services:
       SESSION_CONNECTION: pgsql
       SESSION_COOKIE: cdec_session
       SESSION_LIFETIME: "120"
-      SESSION_SECURE_COOKIE: "false" # SSH tunnel only, require true with HTTPS
+      SESSION_SECURE_COOKIE: "true"
       QUEUE_CONNECTION: sync
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
@@ -64,8 +64,11 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:80"
+      - "0.0.0.0:443:443"
     depends_on:
       - api
+    volumes:
+      - ./runtime/ip-https/tls:/etc/nginx/tls:ro
     mem_limit: 128m
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
