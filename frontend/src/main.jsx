@@ -48,7 +48,7 @@ function Login({ onLogin, busy, error }) {
           {error && <div role="alert" className="auth-error">{error}</div>}
           <button type="submit" className="primary-button" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         </form>
-        <p className="auth-footer">Available only through your private SSH tunnel during setup.</p>
+        <p className="auth-footer">Sign in securely using the server HTTPS address.</p>
       </section>
     </div>
   );
