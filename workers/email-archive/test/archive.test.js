@@ -61,3 +61,48 @@ test('over-size mail is rejected before attempting R2 writes', async () => {
   });
   assert.match(message.rejected, /size/);
 });
+
+test('uses a fixed-length stream for R2 and preserves all MIME bytes', async () => {
+  const previous = globalThis.FixedLengthStream;
+  let chosenLength = null;
+  let saved;
+  globalThis.FixedLengthStream = class {
+    constructor(length) {
+      chosenLength = length;
+      const stream = new TransformStream();
+      this.readable = stream.readable;
+      this.writable = stream.writable;
+    }
+  };
+  try {
+    const message = createMessage();
+    await worker.email(message, {
+      ALLOWED_RECIPIENTS: 'support@example.com',
+      MAIL_ARCHIVE: {
+        async put(key, bytes, options) {
+          saved = { key, data: await new Response(bytes).text(), options };
+          return { key };
+        },
+      },
+    });
+    assert.equal(chosenLength, message.rawSize);
+    assert.equal(saved.data, raw);
+    assert.equal(saved.options.customMetadata.recipient, 'support@example.com');
+  } finally {
+    if (previous === undefined) delete globalThis.FixedLengthStream;
+    else globalThis.FixedLengthStream = previous;
+  }
+});
+
+test('rejects an inconsistent byte count before writing to R2 in fallback mode', async () => {
+  const message = createMessage();
+  message.rawSize++;
+  const oldLog = console.error;
+  console.error = () => {};
+  try {
+    await assert.rejects(worker.email(message, {
+      ALLOWED_RECIPIENTS: 'support@example.com',
+      MAIL_ARCHIVE: { put() { throw Error('should not write'); } },
+    }), /byte count mismatch/);
+  } finally { console.error = oldLog; }
+});

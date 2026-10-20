@@ -17,7 +17,7 @@ export default {
       return;
     }
 
-    if (!Number.isFinite(message.rawSize) || message.rawSize > MAX_EMAIL_BYTES) {
+    if (!Number.isSafeInteger(message.rawSize) || message.rawSize < 1 || message.rawSize > MAX_EMAIL_BYTES) {
       message.setReject('Message exceeds the configured size limit');
       return;
     }
@@ -35,14 +35,37 @@ export default {
 
     // The raw stream must not be decoded into UTF-8 text: email can include
     // binary MIME parts and non-UTF8 encodings.
-    const stored = await env.MAIL_ARCHIVE.put(objectKey, message.raw, {
+    const options = {
       httpMetadata: { contentType: 'message/rfc822' },
       customMetadata: {
         recipient,
         envelope_from: normalizeAddress(message.from).slice(0, 320),
         received_at: receivedAt,
       },
-    });
+    };
+
+    // R2 requires a stream with a known byte length. EmailMessage.raw is an
+    // arbitrary ReadableStream, but rawSize provides its exact length.
+    // Feed the fixed-length stream and R2 concurrently to avoid deadlocking
+    // on backpressure. The bytes are unchanged, including binary MIME parts.
+    let stored;
+    try {
+      if (typeof FixedLengthStream !== 'undefined') {
+        const { readable, writable } = new FixedLengthStream(message.rawSize);
+        const upload = env.MAIL_ARCHIVE.put(objectKey, readable, options);
+        const pipe = message.raw.pipeTo(writable);
+        [stored] = await Promise.all([upload, pipe]);
+      } else {
+        // Bounded fallback for local test runtimes without FixedLengthStream.
+        const bytes = await new Response(message.raw).arrayBuffer();
+        if (bytes.byteLength !== message.rawSize) throw new Error('Raw MIME byte count mismatch');
+        stored = await env.MAIL_ARCHIVE.put(objectKey, bytes, options);
+      }
+    } catch (error) {
+      // Error detail stays in private Worker logs; never log email contents.
+      console.error('R2 email archival failed', error);
+      throw error;
+    }
 
     if (!stored) throw new Error('R2 archive failed to confirm the write');
     // Success means only that R2 accepted the original MIME object.
