@@ -40,11 +40,12 @@ jobs:
           openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" \
             -keyout "$RUNNER_TEMP/cdec-mime-cert/privkey.pem" \
             -out "$RUNNER_TEMP/cdec-mime-cert/fullchain.pem" >/dev/null 2>&1
-          docker run -d --rm --name cdec-pdf-mime-ci \
+          docker run -d --name cdec-pdf-mime-ci \
             -p 127.0.0.1:18081:80 \
             -v "$RUNNER_TEMP/cdec-mime-cert:/etc/nginx/tls:ro" \
             cdec-web-mime-test
-          trap 'docker rm -f cdec-pdf-mime-ci' EXIT
+          trap 'docker logs cdec-pdf-mime-ci || true; docker rm -f cdec-pdf-mime-ci || true' EXIT
+          docker exec cdec-pdf-mime-ci nginx -t
           for attempt in $(seq 1 15); do
             if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then break; fi
             sleep 1
