@@ -7,6 +7,6 @@
     { "binding": "MAIL_ARCHIVE", "bucket_name": "cdec-inbound-mail" }
   ],
   "vars": {
-    "ALLOWED_RECIPIENTS": ""
+    "ALLOWED_RECIPIENTS": "inbox-test@receiptboss.ca"
   }
 }
