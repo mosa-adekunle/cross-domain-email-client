@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import MessageReader from './MessageReader.jsx';
 
 const folders = [
   { label: 'Unified inbox', folder: 'inbox', icon: '▤' },
@@ -120,7 +121,7 @@ function DomainSettings({ domains, mailboxes, refresh, csrf, onExpired }) {
   );
 }
 
-function MessagesPanel({ folder, mailboxes, selectedMailbox, onExpired }) {
+function MessagesPanel({ folder, mailboxes, selectedMailbox, onExpired, onOpenMessage }) {
   const [messages, setMessages] = useState([]);
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [page, setPage] = useState(1);
@@ -150,17 +151,17 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, onExpired }) {
 
   return (
     <section className="panel" aria-label="Messages">
-      <div className="panel-top"><div><h2>{loading ? 'Loading messages…' : `${pagination.total} message${pagination.total === 1 ? '' : 's'}`}</h2><p>{selectedMailbox ? mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address : 'All configured mailboxes'} · {folder}</p></div><SetupStatus>Receiving not enabled</SetupStatus></div>
+      <div className="panel-top"><div><h2>{loading ? 'Loading messages…' : `${pagination.total} message${pagination.total === 1 ? '' : 's'}`}</h2><p>{selectedMailbox ? mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address : 'All configured mailboxes'} · {folder}</p></div><SetupStatus>Private inbox</SetupStatus></div>
       {error ? <div className="form-alert error" role="alert">{error}</div> : loading ? <div className="empty"><p>Loading your mailbox…</p></div> : messages.length === 0 ? (
-        <div className="empty"><div className="empty-icon">✉</div><h3>No messages yet</h3><p>Messages will appear here after Cloudflare R2 ingestion is connected and tested.</p></div>
+        <div className="empty"><div className="empty-icon">✉</div><h3>No messages yet</h3><p>No imported messages in this folder yet.</p></div>
       ) : (
         <>
           <div className="message-list">
-            {messages.map((message) => <div key={message.id} className={`message-row ${message.is_read ? '' : 'unread'}`}>
-              <div className="message-sender">{message.from_name || message.from_address || 'Unknown sender'}<small>{message.mailbox_address}</small></div>
-              <div className="message-summary"><strong>{message.subject || '(no subject)'}</strong><small>{message.preview_text || 'No preview available'}</small></div>
+            {messages.map((message) => <button key={message.id} type="button" className={`message-row message-row-button ${message.is_read ? '' : 'unread'}`} onClick={() => onOpenMessage(message.id)} aria-label={`Read: ${message.subject || '(no subject)'}`}>
+              <span className="message-sender">{message.from_name || message.from_address || 'Unknown sender'}<small>{message.mailbox_address}</small></span>
+              <span className="message-summary"><strong>{message.subject || '(no subject)'}</strong><small>{message.preview_text || 'No preview available'}</small></span>
               <time>{message.received_at || message.sent_at ? new Date(message.received_at || message.sent_at).toLocaleDateString() : ''}</time>
-            </div>)}
+            </button>)}
           </div>
           {pagination.last_page > 1 && <div className="pagination"><button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {page} of {pagination.last_page}</span><button type="button" disabled={page >= pagination.last_page} onClick={() => setPage((value) => value + 1)}>Next</button></div>}
         </>
@@ -177,6 +178,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   const [loadingSetup, setLoadingSetup] = useState(true);
   const [setupError, setSetupError] = useState('');
   const [selectedMailbox, setSelectedMailbox] = useState('');
+  const [openedMessageId, setOpenedMessageId] = useState(() => { const id = new URLSearchParams(window.location.search).get('message'); return id && /^[1-9][0-9]*$/.test(id) ? id : null; });
 
   const refresh = useCallback(async () => {
     try {
@@ -198,6 +200,26 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     refresh().catch(() => {});
   }, [refresh]);
 
+  useEffect(() => {
+    const sync = () => { const id = new URLSearchParams(window.location.search).get('message'); setOpenedMessageId(id && /^[1-9][0-9]*$/.test(id) ? id : null); };
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+
+  const openMessage = (id) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('message', String(id));
+    window.history.pushState(null, '', url.pathname + url.search + url.hash);
+    setOpenedMessageId(String(id));
+  };
+  const closeMessage = () => {
+    if (!openedMessageId) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('message');
+    window.history.pushState(null, '', url.pathname + url.search + url.hash);
+    setOpenedMessageId(null);
+  };
+
   const folderInfo = folders.find((item) => item.label === activeFolder);
   const isSettings = activeFolder === 'Settings';
   const isReady = apiStatus.status === 'ready';
@@ -207,30 +229,30 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
         <div className="identity"><div className="brand-icon">✉</div><div><div className="brand-name">Cross Domain</div><div className="brand-subtitle">Email client</div></div></div>
         <div className="section-label">WORKSPACE</div>
         <nav aria-label="Mail folders">
-          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} onClick={() => setActiveFolder(item.label)}><span aria-hidden="true">{item.icon}</span><span>{item.label}</span></button>)}
+          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} onClick={() => { setActiveFolder(item.label); closeMessage(); }}><span aria-hidden="true">{item.icon}</span><span>{item.label}</span></button>)}
         </nav>
         <div className="section-label mailbox-label">MAILBOXES</div>
         <nav aria-label="Mailboxes" className="mailbox-nav">
-          <button type="button" className={`mailbox-link ${selectedMailbox === '' ? 'selected' : ''}`} onClick={() => { setSelectedMailbox(''); if (isSettings) setActiveFolder('Unified inbox'); }}>All mailboxes</button>
-          {mailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${String(selectedMailbox) === String(mailbox.id) ? 'selected' : ''}`} title={mailbox.address} onClick={() => { setSelectedMailbox(String(mailbox.id)); if (isSettings) setActiveFolder('Unified inbox'); }}>{mailbox.address}</button>)}
+          <button type="button" className={`mailbox-link ${selectedMailbox === '' ? 'selected' : ''}`} onClick={() => { setSelectedMailbox(''); if (isSettings) setActiveFolder('Unified inbox'); closeMessage(); }}>All mailboxes</button>
+          {mailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${String(selectedMailbox) === String(mailbox.id) ? 'selected' : ''}`} title={mailbox.address} onClick={() => { setSelectedMailbox(String(mailbox.id)); if (isSettings) setActiveFolder('Unified inbox'); closeMessage(); }}>{mailbox.address}</button>)}
           {!loadingSetup && !mailboxes.length && <span className="sidebar-hint">Add mailboxes in Settings</span>}
         </nav>
         <div className="sidebar-bottom"><div className="server-dot" /><span>Signed in as {user.name}</span></div>
       </aside>
       <div className="main">
-        <header className="topbar"><div className="breadcrumb">Email <span>/</span> {activeFolder}</div><div className="topbar-actions"><div className={`api-pill ${isReady ? 'ready' : ''}`} role="status"><span className="server-dot" />{isReady ? 'API connected' : 'API unavailable'}</div><button className="signout-button" type="button" onClick={onLogout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button></div></header>
+        <header className="topbar"><div className="breadcrumb">Email <span>/</span> {activeFolder}{openedMessageId && !isSettings ? ' / Read message' : ''}</div><div className="topbar-actions"><div className={`api-pill ${isReady ? 'ready' : ''}`} role="status"><span className="server-dot" />{isReady ? 'API connected' : 'API unavailable'}</div><button className="signout-button" type="button" onClick={onLogout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button></div></header>
         <main className="content">
           <p className="eyebrow">SECURE WORKSPACE</p>
-          <h1>{activeFolder}</h1>
-          <p className="intro">{isSettings ? 'Add your domains and email addresses. Verification and live mail routing are not enabled yet.' : 'All messages remain private to your administrator account. Cloudflare receiving and outbound mail will be connected in a later stage.'}</p>
+          <h1>{openedMessageId && !isSettings ? 'Read message' : activeFolder}</h1>
+          <p className="intro">{isSettings ? 'Manage your domains and mailboxes.' : openedMessageId ? 'Read your archived email securely.' : 'Read imported email from your configured mailboxes in one private workspace.'}</p>
           {setupError && <div className="form-alert error" role="alert">{setupError}</div>}
-          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} onExpired={onExpired} />}
-          <div className="status-grid">
+          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} onExpired={onExpired} onOpenMessage={openMessage} />}
+          {!openedMessageId && <div className="status-grid">
             <div className="status-card"><div>Laravel API</div><strong>{apiStatus.status}</strong><span>Backend service health</span></div>
             <div className="status-card"><div>PostgreSQL</div><strong>{apiStatus.database}</strong><span>Private persistent database</span></div>
-            <div className="status-card"><div>Configured mailboxes</div><strong>{mailboxes.length}</strong><span>Receiving and sending not activated</span></div>
-          </div>
-          <p className="notice">No MX records, Cloudflare Workers, R2 archives, or sending identities are activated by these settings.</p>
+            <div className="status-card"><div>Configured mailboxes</div><strong>{mailboxes.length}</strong><span>Configured addresses</span></div>
+          </div>}
+          {!openedMessageId && <p className="notice">Receiving is managed through Cloudflare. Outbound delivery is not configured yet.</p>}
         </main>
       </div>
     </div>

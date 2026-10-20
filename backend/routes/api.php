@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MailSetupController;
 use App\Http\Controllers\MessageListController;
+use App\Http\Controllers\MessageDetailController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -32,5 +33,7 @@ Route::middleware('web')->group(function (): void {
         Route::get('/mailboxes', [MailSetupController::class, 'mailboxes']);
         Route::post('/mailboxes', [MailSetupController::class, 'addMailbox'])->middleware('throttle:20,1');
         Route::get('/messages', [MessageListController::class, 'index']);
+        Route::get('/messages/{id}', [MessageDetailController::class, 'show'])->whereNumber('id');
+        Route::patch('/messages/{id}/read', [MessageDetailController::class, 'markRead'])->whereNumber('id');
     });
 });

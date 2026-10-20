@@ -258,3 +258,10 @@ For the **required deployment sequence and renewal setup**, see [Direct IP HTTPS
 ## License
 
 No open-source license has been selected yet. Public source visibility does not itself grant permission for unrestricted reuse, modification, or redistribution.
+
+
+### Reading archived email
+
+The authenticated inbox now opens an individual message when its row is clicked, with a back button and browser history. Laravel fetches the original MIME from private R2 on demand, parses its safe text body and headers, and marks the message read via a CSRF-protected request. The original MIME and attachments stay private in R2. HTML-only messages are converted to plain text; HTML rendering and attachment downloads are not yet supported.
+
+No migration or re-import is required. On the Cross Domain Email Client EC2 host, run: git pull --ff-only origin main; sudo docker compose build api web; sudo docker compose up -d --no-deps --force-recreate api web; then verify the new routes and HTTPS inbox.
