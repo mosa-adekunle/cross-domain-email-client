@@ -108,8 +108,16 @@ resource "aws_vpc_security_group_egress_rule" "outbound" {
 }
 
 
-# HTTP and HTTPS will be configured when the application
-# is ready for deployment. PostgreSQL will remain private.
+# Public HTTPS directly on the EC2 Elastic IP. HTTP/80 and PostgreSQL
+# remain closed. TLS is terminated by Nginx in the web container.
+resource "aws_vpc_security_group_ingress_rule" "https" {
+  security_group_id = aws_security_group.app.id
+  description       = "Cross Domain Email Client public HTTPS"
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+}
 
 
 # ------------------------------------------------------------
