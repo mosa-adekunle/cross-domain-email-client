@@ -1,6 +1,6 @@
 # Cloudflare inbound email and private R2 archive
 
-This stage introduces a **safe-by-default Email Worker** and an optional, **manual** Laravel R2 importer. Publishing the repository or rebuilding Docker does not enable inbound routing, change MX records, create an R2 bucket, or enable a background poller.
+> **Update (October 2026):** The manual-only stage below describes the original archive/import rollout. **One-minute scheduled import, persistent checkpoint/retries, daily reconciliation and ordered R2 keys are now specified in [Automatic R2 sync](automatic-r2-sync.md).** Deployment requires updating the Worker and installing timers on the app EC2; do not run its installer on receiptboss-dev.\n\nThis stage introduces a **safe-by-default Email Worker** and an optional, **manual** Laravel R2 importer. Publishing the repository or rebuilding Docker does not enable inbound routing, change MX records, create an R2 bucket, or enable a background poller.
 
 ## Architecture
 

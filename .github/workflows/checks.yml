@@ -1,0 +1,29 @@
+name: Cross Domain Email Client checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  worker-and-php-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Email Worker tests
+        run: npm test --prefix workers/email-archive
+      - name: PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: PHP syntax validation
+        run: |
+          set -e
+          find backend/app backend/database/migrations backend/routes backend/bootstrap -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Shell syntax validation
+        run: |
+          find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n

@@ -2,7 +2,7 @@
 
 A self-hosted, cost-conscious email dashboard for sending, receiving, and managing messages across multiple custom domains without requiring Google Workspace or Microsoft 365 mailboxes.
 
-> **Status:** Planning and initial setup. The application has not been implemented yet.
+> **Status (October 2026):** Laravel API, PostgreSQL, administrator authentication, HTTPS inbox, private Cloudflare Worker → R2 email archive and secure message reader are deployed. One-minute automatic sync is implemented in source and requires the deployment steps below.
 >
 > **Guiding principle:** Minimize recurring costs while maintaining secure access, reliable email delivery, and recoverable message storage.
 
@@ -38,7 +38,7 @@ Initially the application is for **one administrator**. Multi-user and shared in
 | Backend | Laravel (PHP) | API, authentication, message processing, delivery, and jobs |
 | Database | PostgreSQL | Domains, identities, messages, threads, users, and metadata |
 | Incoming mail | Cloudflare Email Routing + Email Workers | Route mail from managed domains to the application |
-| Raw email and attachments | Local storage or Cloudflare R2 | Private, durable message content and files |
+| Raw email and attachments | Private Cloudflare R2 | Durable original MIME independent of EC2 |
 | Sending | Pluggable SMTP/API provider | Send from verified domain identities |
 | Deployment | Docker Compose, one host | Straightforward maintenance at minimal cost |
 
@@ -159,7 +159,7 @@ Develop locally, store code in GitHub, test changes, then deploy to the **single
 
 ## Deployed AWS infrastructure, Terraform, and IAM (verified October 18, 2026)
 
-The **single production EC2 server is provisioned**, reachable by SSH, and has a working Docker Engine and Docker Compose installation. The **email application itself has not yet been implemented or deployed**. Cloudflare Email Routing/Workers, R2, Laravel, React, and PostgreSQL remain upcoming work. The project uses a single production server and keeps its raw-email archive independent of the VM for migration and recovery.
+The **single production EC2 server is provisioned** with Docker Engine, Laravel, React, PostgreSQL, HTTPS and Cloudflare R2 inbound archiving. As of October 20, 2026, three historical test emails were imported successfully. Automatic synchronization is implemented in source and requires the systemd timer installation and Worker update documented below. The project uses a single production server and keeps its raw-email archive independent of the VM for migration and recovery.
 
 ### Live AWS deployment
 
@@ -172,7 +172,7 @@ The **single production EC2 server is provisioned**, reachable by SSH, and has a
 | VPC / subnet | Default VPC `vpc-07aaea246f8683096`; subnet `subnet-0285d94b63fcf8219`; private IP `172.31.2.3` |
 | Elastic IP | `52.14.33.209`, allocation `eipalloc-06b4ed2019474dcb3` |
 | Security group | `sg-04b2fdedc5edcff95`; inbound TCP/22 from `0.0.0.0/0`, all IPv4 outbound |
-| HTTP/HTTPS | 80/443 not yet added to the project security group; PostgreSQL must remain private |
+| HTTP/HTTPS | Public HTTPS/443 is enabled; HTTP/80, port 8080 and PostgreSQL/5432 remain private |
 | SSH | From a Mac: `ssh cross-domain-email`; private key remains on the Mac at `~/.ssh/cross-domain-email` |
 | Docker | Engine 29.9.1, Compose v5.6.0, successful ARM64 `hello-world` verification |
 | Terraform execution host | Existing `receiptboss-dev` EC2 VM (runner only); **not** the application host |
@@ -265,3 +265,8 @@ No open-source license has been selected yet. Public source visibility does not 
 The authenticated inbox now opens an individual message when its row is clicked, with a back button and browser history. Laravel fetches the original MIME from private R2 on demand, parses its safe text body and headers, and marks the message read via a CSRF-protected request. The original MIME and attachments stay private in R2. HTML-only messages are converted to plain text; HTML rendering and attachment downloads are not yet supported.
 
 No migration or re-import is required. On the Cross Domain Email Client EC2 host, run: git pull --ff-only origin main; sudo docker compose build api web; sudo docker compose up -d --no-deps --force-recreate api web; then verify the new routes and HTTPS inbox.
+
+
+## Automatic R2 synchronization (October 2026)
+
+The [one-minute R2 synchronization guide](docs/automatic-r2-sync.md) documents a checkpointed incremental importer, daily full reconciliation for old and late objects, persistent retry queue with exponential backoff, PostgreSQL advisory locking, and EC2 systemd timers. It includes the exact app-EC2 deploy/install/rollback commands, Cloudflare Worker and read-only R2 token permissions, and the division of responsibilities between the existing AWS Terraform runner and Cloudflare. This is an **app/runtime deployment**, not a Terraform infrastructure change: AWS security groups, IAM role permissions, S3 state, and existing routing rules should not be modified. The new ordered Worker archive keys require deploying the updated Worker before enabling the one-minute timer.

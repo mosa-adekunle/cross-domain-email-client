@@ -31,7 +31,10 @@ export default {
     const yyyy = receivedAt.slice(0, 4);
     const mm = receivedAt.slice(5, 7);
     const dd = receivedAt.slice(8, 10);
-    const objectKey = `incoming/${yyyy}/${mm}/${dd}/${crypto.randomUUID()}.eml`;
+    // Timestamp-ordered V2 keys enable durable StartAfter checkpoints.
+    // The legacy UUID layout remains readable by daily reconciliation.
+    const timestamp = receivedAt.replace(/[-:.TZ]/g, '');
+    const objectKey = `incoming/v2/${yyyy}/${mm}/${dd}/${timestamp}-${crypto.randomUUID()}.eml`;
 
     // The raw stream must not be decoded into UTF-8 text: email can include
     // binary MIME parts and non-UTF8 encodings.

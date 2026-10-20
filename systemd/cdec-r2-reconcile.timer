@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule Cross Domain Email Client R2 reconcile importer
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 UTC
+AccuracySec=1min
+Persistent=true
+Unit=cdec-r2-reconcile.service
+
+[Install]
+WantedBy=timers.target

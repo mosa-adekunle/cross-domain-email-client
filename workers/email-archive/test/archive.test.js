@@ -25,7 +25,7 @@ test('stores raw MIME bytes and envelope recipient before returning', async () =
     },
   });
   assert.equal(saved.data, raw);
-  assert.match(saved.key, /^incoming\/\d{4}\/\d{2}\/\d{2}\/[0-9a-f-]+\.eml$/);
+  assert.match(saved.key, /^incoming\/v2\/\d{4}\/\d{2}\/\d{2}\/\d{17}-[0-9a-f-]+\.eml$/);
   assert.equal(saved.metadata.customMetadata.recipient, 'support@example.com');
   assert.equal(saved.metadata.httpMetadata.contentType, 'message/rfc822');
   assert.equal(message.rejected, null);
@@ -105,4 +105,15 @@ test('rejects an inconsistent byte count before writing to R2 in fallback mode',
       MAIL_ARCHIVE: { put() { throw Error('should not write'); } },
     }), /byte count mismatch/);
   } finally { console.error = oldLog; }
+});
+
+
+test('uses sortable timestamp keys for the checkpointed importer', async () => {
+  const message = createMessage();
+  let key;
+  await worker.email(message, {
+    ALLOWED_RECIPIENTS: 'support@example.com',
+    MAIL_ARCHIVE: { async put(k) { key = k; return { key: k }; } },
+  });
+  assert.match(key, /^incoming\/v2\/\d{4}\/\d{2}\/\d{2}\/\d{17}-[0-9a-f-]+\.eml$/);
 });

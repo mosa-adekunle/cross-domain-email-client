@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule Cross Domain Email Client R2 incremental importer
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=5s
+Persistent=true
+Unit=cdec-r2-incremental.service
+
+[Install]
+WantedBy=timers.target
