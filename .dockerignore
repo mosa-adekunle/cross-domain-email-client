@@ -2,6 +2,8 @@
 .gitignore
 .env
 .env.*
+runtime/
+**/runtime/
 !.env.example
 **/.terraform
 **/*.tfstate
