@@ -64,3 +64,25 @@ sudo docker compose ps
 ```
 
 Then hard-refresh `https://52.14.33.209/?message=4` and click **Preview** beside `dcc.pdf` and the JPG. PDF navigation uses **Previous/Next** and zoom +/- buttons. If a malformed PDF cannot be rendered, **Download PDF** remains available from the same modal. In Chrome DevTools → Network, verify the PDF worker is loaded from `/assets/`, not from another domain. In DevTools → Console, there should be no Content Security Policy errors for attachment previews.
+
+
+## Production PDF.js worker MIME repair (October 20, 2026)
+
+A second PDF rendering issue appeared after replacing the blocked native PDF iframe. The JPG preview works, but PDF.js reports that it cannot open `dcc.pdf` before showing page controls. This may occur because some Nginx images serve Vite's emitted `pdf.worker.min-*.mjs` worker with `Content-Type: application/octet-stream`; Chromium refuses to load ES-module scripts with that MIME type. The web Nginx configuration now explicitly maps `*.mjs` to `application/javascript` and returns 404 for absent module paths rather than accidentally serving `index.html`.
+
+The production GitHub CI builds the actual web Docker image, launches its Nginx, finds the hashed PDF.js worker, and checks that an HTTP request receives a JavaScript MIME response. This is a **web-only change**; it requires no new R2 privileges, Cloudflare deployment, AWS Terraform apply, or database migration.
+
+Deploy and verify from the Cross Domain Email EC2 host:
+
+```bash
+cd ~/cross-domain-email-client
+git pull --ff-only origin main
+sudo docker compose build web
+sudo docker compose up -d --no-deps --force-recreate web
+sudo docker compose exec -T web nginx -t
+bash scripts/verify-pdf-worker.sh
+bash scripts/verify-ip-https.sh
+sudo docker compose ps
+```
+
+Then hard-refresh the authenticated email reader and preview the PDF. If it still does not open, the UI now distinguishes likely **worker loading** from **invalid or damaged PDF** errors and prints only the PDF.js exception *category* in the browser console (not email content). Download the original `dcc.pdf` and check whether it opens in a local PDF application. A damaged original attachment needs source-file investigation, not broader CSP rules or public document hosting.

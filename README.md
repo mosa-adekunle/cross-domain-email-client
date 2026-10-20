@@ -280,3 +280,8 @@ The [one-minute R2 synchronization guide](docs/automatic-r2-sync.md) documents a
 ### Browser attachment preview compatibility
 
 PDFs are rendered locally with [Mozilla PDF.js](https://mozilla.github.io/pdf.js/) instead of Chrome's sandboxed iframe-based PDF plugin. Image previews use validated `blob:` image URLs permitted by the narrowly scoped Nginx `img-src` policy; `object-src` and `frame-src` remain disabled. See [attachments](docs/attachments.md) for the app-only web deployment and troubleshooting steps.
+
+
+### PDF worker production MIME verification
+
+Production Nginx explicitly serves generated `.mjs` worker files with the JavaScript MIME type required by Chrome; missing module files return 404 rather than the SPA HTML page. The automated GitHub build smoke-tests the web image and the live-server command is `bash scripts/verify-pdf-worker.sh`. See [attachments](docs/attachments.md).

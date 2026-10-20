@@ -35,10 +35,22 @@ export default function PdfAttachmentPreview({ bytes, filename }) {
       }
       setDocument(loaded);
       setTotalPages(loaded.numPages);
-    }).catch(() => {
+    }).catch((cause) => {
       if (!disposed) {
         setStatus('');
-        setError('The PDF could not be opened. You can still download the original attachment.');
+        // Do not log attachment bytes, filename, or private R2 object keys.
+        // The exception category is sufficient to distinguish corrupt PDFs
+        // from the production Nginx ES-module worker MIME configuration.
+        const category = String(cause?.name || 'UnknownError');
+        console.warn('PDF preview initialization failed:', category);
+        const details = String(cause?.message || '');
+        const workerProblem = /fake worker|worker script|module script|dynamically imported|failed to fetch|workerSrc/i.test(details);
+        const invalidPdf = category === 'InvalidPDFException' || /invalid pdf|missing pdf/i.test(details);
+        setError(workerProblem
+          ? 'The PDF viewer could not load its worker script. Verify the .mjs JavaScript MIME type on the server.'
+          : invalidPdf
+            ? 'This attachment does not contain a valid readable PDF. Download it to check the original file.'
+            : 'The PDF could not be opened. You can still download the original attachment.');
       }
     });
     return () => {

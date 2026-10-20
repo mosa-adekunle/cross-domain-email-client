@@ -32,6 +32,28 @@ jobs:
         run: |
           npm install --prefix frontend --no-audit --no-fund
           npm run build --prefix frontend
+      - name: PDF.js worker MIME integration test in production Nginx
+        run: |
+          set -euo pipefail
+          docker build -f docker/web/Dockerfile -t cdec-web-mime-test .
+          mkdir -p "$RUNNER_TEMP/cdec-mime-cert"
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" \
+            -keyout "$RUNNER_TEMP/cdec-mime-cert/privkey.pem" \
+            -out "$RUNNER_TEMP/cdec-mime-cert/fullchain.pem" >/dev/null 2>&1
+          docker run -d --rm --name cdec-pdf-mime-ci \
+            -p 127.0.0.1:18081:80 \
+            -v "$RUNNER_TEMP/cdec-mime-cert:/etc/nginx/tls:ro" \
+            cdec-web-mime-test
+          trap 'docker rm -f cdec-pdf-mime-ci' EXIT
+          for attempt in $(seq 1 15); do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          worker_path="$(docker exec cdec-pdf-mime-ci sh -c 'find /usr/share/nginx/html/assets -name "pdf.worker*.mjs" -print -quit')"
+          test -n "$worker_path"
+          asset_name="${worker_path##*/}"
+          curl -fsSI "http://127.0.0.1:18081/assets/$asset_name" | tr -d '\r' | \
+            grep -Eiq '^content-type: *(application|text)/javascript([;[:space:]]|$)'
       - name: Shell syntax validation
         run: |
           find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
