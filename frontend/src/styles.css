@@ -140,3 +140,36 @@ h1 { font-size: 35px; font-weight: 750; letter-spacing: -1.1px; margin: 13px 0; 
   .message-body { padding: 24px 18px; }
   .message-view-notice { padding: 15px 18px; }
 }
+
+
+/* Private MIME attachment browsing */
+.message-attachments { margin: 0 30px 28px; padding-top: 22px; border-top: 1px solid #e8edf5; }
+.message-attachments h3 { font-size: 14px; font-weight: 750; margin: 0 0 15px; }
+.message-attachments h3 span { font-weight: 500; color: #7c8ca4; }
+.attachment-list { display: grid; gap: 10px; }
+.attachment-item { display: flex; gap: 13px; align-items: center; min-width: 0; padding: 13px; border: 1px solid #e3eaf5; border-radius: 10px; background: #f9fbff; }
+.attachment-icon { display: grid; flex: none; place-items: center; border-radius: 9px; background: #e9effe; width: 36px; height: 36px; font-size: 17px; }
+.attachment-information { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.attachment-information strong { font-size: 13px; overflow-wrap: anywhere; }
+.attachment-information small { color: #7586a2; font-size: 11px; overflow-wrap: anywhere; }
+.attachment-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.attachment-actions button { padding: 8px 12px; border: 1px solid #cbd7ed; border-radius: 7px; background: #fff; color: #315bc8; font-size: 12px; font-weight: 650; }
+.attachment-actions button:hover:not(:disabled) { background: #edf2ff; }
+.attachment-actions button:disabled { opacity: .55; cursor: wait; }
+.attachment-actions button:focus-visible, .attachment-modal-header button:focus-visible { outline: 2px solid #3867f6; outline-offset: 2px; }
+.attachment-error { color: #ac3544; margin: 12px 0 0; font-size: 12px; }
+.attachment-modal-overlay { position: fixed; inset: 0; z-index: 40; display: flex; justify-content: center; align-items: center; background: rgb(11 22 42 / 76%); padding: 24px; }
+.attachment-modal { width: min(980px, 100%); height: min(820px, 100%); display: flex; flex-direction: column; border-radius: 12px; background: white; overflow: hidden; box-shadow: 0 15px 65px rgb(0 0 0 / 25%); }
+.attachment-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; border-bottom: 1px solid #e7ecf5; padding: 14px 19px; }
+.attachment-modal-header strong { font-size: 14px; overflow-wrap: anywhere; }
+.attachment-modal-header button { flex: none; border: 1px solid #ccd7eb; border-radius: 7px; background: #fff; color: #284c9f; padding: 9px 13px; font-size: 12px; }
+.attachment-image-wrap { display: grid; flex: 1; min-height: 0; place-items: center; overflow: auto; padding: 20px; background: #f5f7fb; }
+.attachment-image-wrap img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.attachment-pdf-frame { flex: 1; border: 0; width: 100%; min-height: 0; background: #f5f7fb; }
+.attachment-text-preview { flex: 1; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 22px; margin: 0; color: #253751; font-size: 13px; line-height: 1.6; }
+@media (max-width: 760px) {
+  .message-attachments { margin: 0 18px 20px; }
+  .attachment-item { flex-wrap: wrap; }
+  .attachment-actions { flex: 1 0 100%; justify-content: flex-end; }
+  .attachment-modal-overlay { padding: 8px; }
+}

@@ -34,6 +34,7 @@ Route::middleware('web')->group(function (): void {
         Route::post('/mailboxes', [MailSetupController::class, 'addMailbox'])->middleware('throttle:20,1');
         Route::get('/messages', [MessageListController::class, 'index']);
         Route::get('/messages/{id}', [MessageDetailController::class, 'show'])->whereNumber('id');
+        Route::get('/messages/{id}/attachments/{index}', [MessageDetailController::class, 'attachment'])->whereNumber('id')->whereNumber('index')->middleware('throttle:60,1');
         Route::patch('/messages/{id}/read', [MessageDetailController::class, 'markRead'])->whereNumber('id');
     });
 });

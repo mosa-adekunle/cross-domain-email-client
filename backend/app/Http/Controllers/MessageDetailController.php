@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ArchivedMimeAttachments;
 use Aws\S3\S3Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Throwable;
+use Symfony\Component\HttpFoundation\HeaderUtils;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use ZBateson\MailMimeParser\Message;
 
 class MessageDetailController
@@ -36,11 +40,13 @@ class MessageDetailController
         $cc = $recipients->where('type', 'cc')->pluck('address')->implode(', ');
         $from = trim((string) ($message->from_name ?? '')) ?: (string) ($message->from_address ?? '');
         $body = (string) ($message->draft_body_text ?? '');
+        $attachments = [];
 
         if ($message->incoming_object_id !== null) {
             try {
                 $raw = $this->readArchive($message);
                 $parsed = Message::from($raw, false);
+                $attachments = ArchivedMimeAttachments::listing($parsed);
                 $body = (string) ($parsed->getTextContent() ?? '');
                 if (trim($body) === '') {
                     $body = $this->htmlToText((string) ($parsed->getHtmlContent() ?? ''));
@@ -78,8 +84,67 @@ class MessageDetailController
                 'is_read' => (bool) $message->is_read,
                 'body' => $body,
                 'body_truncated' => $truncated,
+                'attachments' => $attachments,
             ],
         ])->header('Cache-Control', 'no-store');
+    }
+
+
+    public function attachment(int $id, int $index): SymfonyResponse
+    {
+        // Route is under auth:web, and deleted / unknown messages are 404.
+        // Never accept an R2 object key, filename or bucket from the browser.
+        if ($index < 0 || $index >= ArchivedMimeAttachments::MAX_ATTACHMENTS) {
+            abort(404, 'Attachment not found.');
+        }
+
+        $item = DB::table('mail_messages as m')
+            ->join('incoming_objects as o', 'o.id', '=', 'm.incoming_object_id')
+            ->where('m.id', $id)
+            ->whereNull('m.deleted_at')
+            ->select('o.r2_bucket', 'o.r2_object_key', 'o.size_bytes')
+            ->first();
+
+        if (! $item) abort(404, 'Attachment not found.');
+
+        try {
+            $parsed = Message::from($this->readArchive($item), false);
+            $part = ArchivedMimeAttachments::parts($parsed)[$index] ?? null;
+            if ($part === null) abort(404, 'Attachment not found.');
+
+            $bytes = ArchivedMimeAttachments::decodedBytes($part);
+            $name = ArchivedMimeAttachments::filename((string) ($part->getFilename() ?? ''), $index);
+            $isPreview = request()->query('preview') === '1';
+            $safeMime = ArchivedMimeAttachments::previewMime((string) $part->getContentType(), $bytes);
+
+            if ($isPreview && $safeMime === null) {
+                return response()->json(['message' => 'This file type cannot be previewed safely. Use Download instead.'], 415)
+                    ->header('Cache-Control', 'no-store');
+            }
+
+            $disposition = HeaderUtils::makeDisposition(
+                $isPreview ? ResponseHeaderBag::DISPOSITION_INLINE : ResponseHeaderBag::DISPOSITION_ATTACHMENT,
+                $name,
+                ArchivedMimeAttachments::asciiFilename($name)
+            );
+
+            return response($bytes, 200, [
+                'Content-Type' => $isPreview ? $safeMime : 'application/octet-stream',
+                'Content-Disposition' => $disposition,
+                'Content-Length' => (string) strlen($bytes),
+                'Cache-Control' => 'private, no-store, max-age=0',
+                'X-Content-Type-Options' => 'nosniff',
+                'Cross-Origin-Resource-Policy' => 'same-origin',
+                'Referrer-Policy' => 'no-referrer',
+                'Content-Security-Policy' => "sandbox; default-src 'none'",
+            ]);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $error) {
+            throw $error;
+        } catch (Throwable $error) {
+            report($error);
+            return response()->json(['message' => 'The attachment could not be retrieved. Please try again.'], 502)
+                ->header('Cache-Control', 'no-store');
+        }
     }
 
     public function markRead(int $id): JsonResponse

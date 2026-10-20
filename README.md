@@ -270,3 +270,8 @@ No migration or re-import is required. On the Cross Domain Email Client EC2 host
 ## Automatic R2 synchronization (October 2026)
 
 The [one-minute R2 synchronization guide](docs/automatic-r2-sync.md) documents a checkpointed incremental importer, daily full reconciliation for old and late objects, persistent retry queue with exponential backoff, PostgreSQL advisory locking, and EC2 systemd timers. It includes the exact app-EC2 deploy/install/rollback commands, Cloudflare Worker and read-only R2 token permissions, and the division of responsibilities between the existing AWS Terraform runner and Cloudflare. This is an **app/runtime deployment**, not a Terraform infrastructure change: AWS security groups, IAM role permissions, S3 state, and existing routing rules should not be modified. The new ordered Worker archive keys require deploying the updated Worker before enabling the one-minute timer.
+
+
+## Received-email attachments
+
+[View and download archived attachments](docs/attachments.md) adds a private, authenticated attachment list to the email reader. Previously imported `.eml` files are parsed on demand from Cloudflare R2; JPG/PNG/GIF/WebP images, PDFs and safe text can be previewed, and all supported MIME parts can be downloaded without a database migration. HTML and arbitrary binary attachments are download-only. No Terraform/IAM/Worker changes are necessary for this app-only deployment.

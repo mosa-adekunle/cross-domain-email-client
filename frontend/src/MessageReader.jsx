@@ -1,9 +1,105 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export default function MessageReader({ messageId, csrf, onBack, onExpired }) {
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const [attachmentBusy, setAttachmentBusy] = useState(null);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [preview, setPreview] = useState(null);
+  const previewUrl = useRef(null);
+  const inFlight = useRef(null);
+
+  const closePreview = () => {
+    inFlight.current?.abort();
+    inFlight.current = null;
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+    previewUrl.current = null;
+    setPreview(null);
+    setAttachmentBusy(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      inFlight.current?.abort();
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    closePreview();
+    setAttachmentError('');
+  }, [messageId]);
+
+  useEffect(() => {
+    if (!preview) return undefined;
+    const onKey = (event) => { if (event.key === 'Escape') closePreview(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [preview]);
+
+  async function getAttachment(file, requestPreview) {
+    setAttachmentError('');
+    const busyKey = String(file.index) + (requestPreview ? ':preview' : ':download');
+    setAttachmentBusy(busyKey);
+    inFlight.current?.abort();
+    const controller = new AbortController();
+    inFlight.current = controller;
+    try {
+      const url = '/api/messages/' + encodeURIComponent(messageId) + '/attachments/' + file.index +
+        (requestPreview ? '?preview=1' : '');
+      const response = await fetch(url, {
+        credentials: 'same-origin', cache: 'no-store',
+        signal: controller.signal,
+        headers: { Accept: requestPreview ? '*/*' : 'application/octet-stream' },
+      });
+      if (response.status === 401) {
+        onExpired();
+        throw new Error('Your session expired. Sign in again.');
+      }
+      if (!response.ok) {
+        throw new Error(response.status === 415 ? 'This attachment cannot be previewed safely. Use Download instead.' :
+          'Unable to retrieve the attachment. Please try again.');
+      }
+      const contentType = (response.headers.get('Content-Type') || '').split(';')[0].toLowerCase();
+      const blob = await response.blob();
+      if (controller.signal.aborted) return;
+      if (!requestPreview) {
+        const temporaryUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = temporaryUrl;
+        link.download = file.filename || 'attachment';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(temporaryUrl), 30000);
+        return;
+      }
+      const kind = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(contentType) ? 'image'
+        : contentType === 'application/pdf' ? 'pdf' : contentType === 'text/plain' ? 'text' : null;
+      if (!kind) {
+        throw new Error('This attachment cannot be previewed safely. Use Download instead.');
+      }
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+      previewUrl.current = null;
+      if (kind === 'text') {
+        setPreview({ filename: file.filename, kind, text: await blob.text() });
+      } else {
+        const objectUrl = URL.createObjectURL(blob);
+        previewUrl.current = objectUrl;
+        setPreview({ filename: file.filename, kind, url: objectUrl });
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') setAttachmentError(err.message || 'Unable to retrieve the attachment.');
+    } finally {
+      if (inFlight.current === controller) {
+        inFlight.current = null;
+        setAttachmentBusy(null);
+      }
+    }
+  }
+
 
   useEffect(() => {
     let active = true;
@@ -68,10 +164,48 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired }) {
           </dl>
           <div className="message-body">
             <div className="message-body-heading">Message</div>
-            <div className="message-text">{message.body || 'This email has no readable text body.'}</div>
+            <div className="message-text">{message.body || ((message.attachments || []).length ? 'This message has attachments but no readable text body.' : 'This email has no readable text body.')}</div>
             {message.body_truncated && <p className="message-truncated">Long message shortened for display; the original archived email is intact.</p>}
           </div>
-          <div className="message-view-notice">HTML-only emails are displayed as text for security. Attachments remain preserved in private storage; attachment viewing is not available yet.</div>
+          {(message.attachments || []).length > 0 && (
+            <section className="message-attachments" aria-label="Email attachments">
+              <h3>Attachments <span>({message.attachments.length})</span></h3>
+              <div className="attachment-list">
+                {message.attachments.map((file) => (
+                  <div className="attachment-item" key={file.index}>
+                    <span className="attachment-icon" aria-hidden="true">📎</span>
+                    <div className="attachment-information">
+                      <strong title={file.filename}>{file.filename}</strong>
+                      <small>{file.content_type}{file.size_bytes != null ? ' · ' + (file.size_bytes < 1024 ? file.size_bytes + ' B' : (file.size_bytes / 1024 / 1024 >= 1 ? (file.size_bytes / 1024 / 1024).toFixed(1) + ' MB' : (file.size_bytes / 1024).toFixed(1) + ' KB')) : ''}</small>
+                    </div>
+                    <div className="attachment-actions">
+                      {file.can_preview && <button type="button" onClick={() => getAttachment(file, true)} disabled={attachmentBusy !== null}>
+                        {attachmentBusy === file.index + ':preview' ? 'Opening…' : 'Preview'}
+                      </button>}
+                      <button type="button" onClick={() => getAttachment(file, false)} disabled={attachmentBusy !== null}>
+                        {attachmentBusy === file.index + ':download' ? 'Downloading…' : 'Download'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}
+            </section>
+          )}
+          <div className="message-view-notice">Files are retrieved privately from the original archived message. Preview is restricted to validated images, PDFs and safe text; other file types are download-only. Only open files you trust.</div>
+          {preview && (
+            <div className="attachment-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closePreview(); }}>
+              <div className="attachment-modal" role="dialog" aria-modal="true" aria-label={'Preview ' + preview.filename}>
+                <div className="attachment-modal-header">
+                  <strong>{preview.filename}</strong>
+                  <button type="button" onClick={closePreview} aria-label="Close attachment preview">Close ×</button>
+                </div>
+                {preview.kind === 'image' && <div className="attachment-image-wrap"><img src={preview.url} alt={preview.filename} /></div>}
+                {preview.kind === 'pdf' && <iframe className="attachment-pdf-frame" src={preview.url} title={preview.filename} sandbox="allow-downloads" />}
+                {preview.kind === 'text' && <pre className="attachment-text-preview">{preview.text}</pre>}
+              </div>
+            </div>
+          )}
         </article>
       ) : null}
     </section>
