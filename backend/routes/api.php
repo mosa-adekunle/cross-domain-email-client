@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MailSetupController;
 use App\Http\Controllers\MessageListController;
 use App\Http\Controllers\MessageDetailController;
+use App\Http\Controllers\MessageActionController;
 use App\Http\Controllers\OutboundMailController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ Route::middleware('web')->group(function (): void {
         Route::delete('/drafts/{id}', [OutboundMailController::class, 'deleteDraft'])->whereNumber('id');
         Route::post('/drafts/{id}/send', [OutboundMailController::class, 'sendDraft'])->whereNumber('id')->middleware('throttle:10,1');
         Route::get('/messages/unread-count', [MessageListController::class, 'unreadCount']);
+        Route::post('/messages/actions', [MessageActionController::class, 'bulk'])->middleware('throttle:60,1');
         Route::get('/messages', [MessageListController::class, 'index']);
         Route::get('/messages/{id}', [MessageDetailController::class, 'show'])->whereNumber('id');
         Route::get('/messages/{id}/attachments/{index}', [MessageDetailController::class, 'attachment'])->whereNumber('id')->whereNumber('index')->middleware('throttle:60,1');
