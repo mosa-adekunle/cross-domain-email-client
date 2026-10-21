@@ -722,16 +722,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   object-fit: contain;
   flex: none;
 }
-.identity .brand-logo-subtitle {
-  display: block;
-  margin: -10px 0 0 7px;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.25;
-}
 @media (max-width: 760px) {
   .identity.identity-with-logo { padding: 0 8px 6px; }
   .identity .brand-logo { width: 196px; max-width: 100%; }
-  .identity .brand-logo-subtitle { margin-top: -9px; }
 }
