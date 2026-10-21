@@ -25,6 +25,8 @@ export default function ComposeMail({ csrf, mailboxes, selectedMailbox, draftId,
   const [to, setTo] = useState(initial?.to || '');
   const [cc, setCc] = useState(initial?.cc || '');
   const [bcc, setBcc] = useState(initial?.bcc || '');
+  const [showCc, setShowCc] = useState(Boolean(initial?.cc));
+  const [showBcc, setShowBcc] = useState(Boolean(initial?.bcc));
   const [subject, setSubject] = useState(initial?.subject || '');
   const [body, setBody] = useState(initial?.body_text || '');
   const [replyId, setReplyId] = useState(initial?.in_reply_to || '');
@@ -49,6 +51,8 @@ export default function ComposeMail({ csrf, mailboxes, selectedMailbox, draftId,
         setTo((item.to_addresses || []).join(', '));
         setCc((item.cc_addresses || []).join(', '));
         setBcc((item.bcc_addresses || []).join(', '));
+        setShowCc(Boolean(item.cc_addresses?.length));
+        setShowBcc(Boolean(item.bcc_addresses?.length));
         setSubject(item.subject || '');
         setBody(item.body || '');
         setReplyId(item.in_reply_to || '');
@@ -120,40 +124,58 @@ export default function ComposeMail({ csrf, mailboxes, selectedMailbox, draftId,
   }
 
   return (
-    <section className="panel compose-panel" aria-label={draftId ? 'Edit draft' : 'Compose email'}>
+    <section className="panel compose-panel" aria-label={draftId ? 'Edit draft' : 'Compose email'} role="dialog" aria-modal="false">
       <header className="compose-header">
-        <div><h2>{draftId ? 'Edit draft' : 'New message'}</h2><p>Send email from one of your configured custom-domain mailboxes.</p></div>
-        <button type="button" className="compose-secondary" onClick={onClose}>Back to messages</button>
+        <h2>{draftId ? 'Edit draft' : 'New message'}</h2>
+        <button type="button" className="compose-close" onClick={onClose} aria-label="Close compose window" title="Close compose window">×</button>
       </header>
       {loading ? <div className="empty">Loading draft…</div> : (
         <form className="compose-fields" onSubmit={(event) => { event.preventDefault(); action('send'); }}>
           {status && !status.configured && (
-            <div className="compose-warning" role="status">
-              Outgoing SMTP is not configured. You can save drafts now, but sending will remain disabled until credentials and a verified domain are added on the server.
-            </div>
+            <div className="compose-warning" role="status">Outgoing SMTP is not configured. Drafts can be saved, but sending is disabled until the server has working SMTP credentials.</div>
           )}
-          <label htmlFor="compose-from">From</label>
-          <select id="compose-from" value={mailboxId} onChange={(event) => setMailboxId(event.target.value)} disabled={busy || locked} required>
-            {!senderOptions.length && <option value="">No configured sender addresses</option>}
-            {senderOptions.map((sender) => <option key={sender.id} value={sender.id}>{sender.display_name ? sender.display_name + ' <' + sender.address + '>' : sender.address}</option>)}
-          </select>
-          <label htmlFor="compose-to">To</label>
-          <input id="compose-to" type="text" autoComplete="off" maxLength={7000} placeholder="recipient@example.com (comma-separated)" value={to} onChange={(event) => setTo(event.target.value)} disabled={busy || locked} />
-          <div className="compose-two">
-            <div><label htmlFor="compose-cc">CC</label><input id="compose-cc" value={cc} placeholder="Optional" maxLength={7000} onChange={(event) => setCc(event.target.value)} disabled={busy || locked} /></div>
-            <div><label htmlFor="compose-bcc">BCC</label><input id="compose-bcc" value={bcc} placeholder="Optional (hidden from recipients)" maxLength={7000} onChange={(event) => setBcc(event.target.value)} disabled={busy || locked} /></div>
+          <div className="compose-address-row">
+            <label htmlFor="compose-from">From</label>
+            <select id="compose-from" value={mailboxId} onChange={(event) => setMailboxId(event.target.value)} disabled={busy || locked} required>
+              {!senderOptions.length && <option value="">No configured sender addresses</option>}
+              {senderOptions.map((sender) => <option key={sender.id} value={sender.id}>{sender.display_name ? sender.display_name + ' <' + sender.address + '>' : sender.address}</option>)}
+            </select>
           </div>
-          <label htmlFor="compose-subject">Subject</label>
-          <input id="compose-subject" value={subject} maxLength={998} onChange={(event) => setSubject(event.target.value)} disabled={busy || locked} placeholder="Subject" />
-          <label htmlFor="compose-body">Message</label>
-          <textarea id="compose-body" rows={13} maxLength={262144} value={body} onChange={(event) => setBody(event.target.value)} disabled={busy || locked} placeholder="Write your message…" />
-          <p className="compose-hint">Plain-text delivery is supported in this phase. Outgoing attachments and rich-text signatures are not yet implemented.</p>
+          <div className="compose-address-row compose-to-row">
+            <label htmlFor="compose-to">To</label>
+            <input id="compose-to" type="text" autoComplete="off" maxLength={7000} placeholder="Recipients" value={to} onChange={(event) => setTo(event.target.value)} disabled={busy || locked} />
+            <div className="recipient-toggles">
+              {!showCc && <button type="button" onClick={() => setShowCc(true)} disabled={busy || locked}>Cc</button>}
+              {!showBcc && <button type="button" onClick={() => setShowBcc(true)} disabled={busy || locked}>Bcc</button>}
+            </div>
+          </div>
+          {showCc && <div className="compose-address-row">
+            <label htmlFor="compose-cc">Cc</label>
+            <input id="compose-cc" value={cc} placeholder="Recipients" maxLength={7000} onChange={(event) => setCc(event.target.value)} disabled={busy || locked} />
+            {!cc && <button type="button" className="recipient-hide" onClick={() => setShowCc(false)} aria-label="Hide Cc field">×</button>}
+          </div>}
+          {showBcc && <div className="compose-address-row">
+            <label htmlFor="compose-bcc">Bcc</label>
+            <input id="compose-bcc" value={bcc} placeholder="Hidden recipients" maxLength={7000} onChange={(event) => setBcc(event.target.value)} disabled={busy || locked} />
+            {!bcc && <button type="button" className="recipient-hide" onClick={() => setShowBcc(false)} aria-label="Hide Bcc field">×</button>}
+          </div>}
+          <div className="compose-subject-line">
+            <label htmlFor="compose-subject" className="visually-hidden">Subject</label>
+            <input id="compose-subject" value={subject} maxLength={998} onChange={(event) => setSubject(event.target.value)} disabled={busy || locked} placeholder="Subject" />
+          </div>
+          <div className="compose-editor">
+            <label htmlFor="compose-body" className="visually-hidden">Message</label>
+            <textarea id="compose-body" maxLength={262144} value={body} onChange={(event) => setBody(event.target.value)} disabled={busy || locked} placeholder="Write your message…" />
+          </div>
           {error && <div className="form-alert error" role="alert">{error}</div>}
           {note && <div className="form-alert success" role="status">{note}</div>}
           {locked && <div className="compose-warning">This draft was submitted or its delivery status is uncertain. It cannot be submitted again automatically.</div>}
-          <div className="compose-actions">
-            <button type="button" className="compose-secondary" onClick={() => action('save')} disabled={busy !== '' || locked || !mailboxId}>{busy === 'save' ? 'Saving…' : 'Save draft'}</button>
-            <button type="submit" className="primary-button" disabled={busy !== '' || locked || !mailboxId || !status?.configured}>{busy === 'send' ? 'Sending…' : 'Send email →'}</button>
+          <div className="compose-footer">
+            <div className="compose-actions">
+              <button type="submit" className="primary-button" disabled={busy !== '' || locked || !mailboxId || !status?.configured}>{busy === 'send' ? 'Sending…' : 'Send'}</button>
+              <button type="button" className="compose-secondary" onClick={() => action('save')} disabled={busy !== '' || locked || !mailboxId}>{busy === 'save' ? 'Saving…' : 'Save draft'}</button>
+            </div>
+            <span className="compose-hint">Plain text only · Save drafts before closing</span>
           </div>
         </form>
       )}
