@@ -15,6 +15,7 @@ class MessageListController
             'folder' => ['sometimes', Rule::in(['inbox', 'sent', 'drafts', 'archive'])],
             'mailbox_id' => ['nullable', 'integer', Rule::exists('mailboxes', 'id')],
             'page' => ['sometimes', 'integer', 'min:1', 'max:10000'],
+            'q' => ['sometimes', 'nullable', 'string', 'max:120'],
         ]);
         $folder = $filters['folder'] ?? 'inbox';
 
@@ -32,6 +33,24 @@ class MessageListController
 
         if (isset($filters['mailbox_id'])) {
             $query->where('m.mailbox_id', $filters['mailbox_id']);
+        }
+
+        // Search stays scoped to the selected folder and optional mailbox.
+        // Bind the pattern instead of interpolating user content into SQL.
+        $term = trim((string) ($filters['q'] ?? ''));
+        if ($term !== '') {
+            $pattern = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term).'%';
+            $query->where(function ($search) use ($pattern): void {
+                $search->where('m.subject', 'ilike', $pattern)
+                    ->orWhere('m.preview_text', 'ilike', $pattern)
+                    ->orWhere('m.from_address', 'ilike', $pattern)
+                    ->orWhere('m.from_name', 'ilike', $pattern)
+                    ->orWhereExists(function ($recipients) use ($pattern): void {
+                        $recipients->selectRaw('1')->from('mail_recipients as r')
+                            ->whereColumn('r.mail_message_id', 'm.id')
+                            ->where('r.address', 'ilike', $pattern);
+                    });
+            });
         }
 
         $messages = $query->paginate(25);
