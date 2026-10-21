@@ -382,7 +382,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="identity identity-with-logo"><img className="brand-logo" src="/made-north-technologies-logo.svg" alt="Made North Technologies" width="2048" height="682" /><span className="brand-subtitle brand-logo-subtitle">Mail</span></div>
+        <div className="identity identity-with-logo"><img className="brand-logo" src="/made-north-technologies-logo.svg" alt="Made North Technologies" width="2048" height="682" /></div>
         <button type="button" className="sidebar-compose" onClick={() => startCompose()} disabled={!mailboxes.length}><MailIcon name="compose" size={21} /><span>Compose</span></button>
         <nav aria-label="Mail folders" className="folder-nav">
           {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} aria-current={activeFolder === item.label ? 'page' : undefined} onClick={() => selectFolder(item.label)}><MailIcon name={item.icon} size={19}/><span>{item.title}</span>{item.folder === 'inbox' && unreadCount > 0 && <span className="nav-unread-count" aria-label={`${unreadCount} new messages`}>({unreadCount} new)</span>}</button>)}
