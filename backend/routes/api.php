@@ -38,6 +38,7 @@ Route::middleware('web')->group(function (): void {
         Route::patch('/drafts/{id}', [OutboundMailController::class, 'updateDraft'])->whereNumber('id')->middleware('throttle:60,1');
         Route::delete('/drafts/{id}', [OutboundMailController::class, 'deleteDraft'])->whereNumber('id');
         Route::post('/drafts/{id}/send', [OutboundMailController::class, 'sendDraft'])->whereNumber('id')->middleware('throttle:10,1');
+        Route::get('/messages/unread-count', [MessageListController::class, 'unreadCount']);
         Route::get('/messages', [MessageListController::class, 'index']);
         Route::get('/messages/{id}', [MessageDetailController::class, 'show'])->whereNumber('id');
         Route::get('/messages/{id}/attachments/{index}', [MessageDetailController::class, 'attachment'])->whereNumber('id')->whereNumber('index')->middleware('throttle:60,1');
