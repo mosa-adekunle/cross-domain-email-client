@@ -7,6 +7,7 @@ const folders = [
   { label: 'Sent', title: 'Sent', folder: 'sent', icon: 'sent' },
   { label: 'Drafts', title: 'Drafts', folder: 'drafts', icon: 'drafts' },
   { label: 'Archive', title: 'Archive', folder: 'archive', icon: 'archive' },
+  { label: 'Trash', title: 'Trash', folder: 'trash', icon: 'trash' },
   { label: 'Settings', title: 'Settings', folder: 'settings', icon: 'settings' },
 ];
 
@@ -15,6 +16,10 @@ const iconPaths = {
   sent: 'm22 2-7 20-4-9-9-4 20-7ZM22 2 11 13',
   drafts: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5',
   archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
+  trash: 'M3 6h18M8 6V4h8v2M5 6l1 15h12l1-15M10 10v7M14 10v7',
+  restore: 'M3 12a9 9 0 1 0 3-7M3 3v6h6M12 7v5l4 3',
+  mail: 'M3 5h18v14H3zM3 6l9 7 9-7',
+  mailopen: 'M3 10l9-7 9 7v10H3V10zm0 0 9 7 9-7',
   settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm-1-13h2l.6 2.2 1.8.8 2-.9 1.5 1.5-.9 2  .8 1.8 2.2.6v2l-2.2.6-.8 1.8.9 2-1.5 1.5-2-.9-1.8.8-.6 2.2h-2l-.6-2.2-1.8-.8-2 .9-1.5-1.5.9-2-.8-1.8-2.2-.6v-2l2.2-.6.8-1.8-.9-2L6.5 3.6l2 .9 1.8-.8L11 2.5',
   search: 'm21 21-4.5-4.5M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z',
   refresh: 'M20 6v5h-5M4 18v-5h5M5.8 9A7 7 0 0 1 18 6l2 5M4 13l2 5a7 7 0 0 0 12-3',
@@ -166,59 +171,53 @@ function DomainSettings({ domains, mailboxes, refresh, csrf, onExpired }) {
   );
 }
 
-function MessagesPanel({ folder, mailboxes, selectedMailbox, query, onExpired, onOpenMessage, onOpenDraft }) {
+function MessagesPanel({ folder, mailboxes, selectedMailbox, query, csrf, onExpired, onOpenMessage, onOpenDraft, onMutation }) {
   const [messages, setMessages] = useState([]);
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
   const selectedAddress = selectedMailbox ? mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address : null;
   const folderTitle = folders.find((item) => item.folder === folder)?.title || 'Messages';
+  const visibleIds = messages.map((m) => Number(m.id));
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
 
-  useEffect(() => { setPage(1); }, [folder, selectedMailbox, query]);
+  useEffect(() => { setPage(1); setSelectedIds([]); setNotice(''); }, [folder, selectedMailbox, query]);
+  useEffect(() => { setSelectedIds([]); }, [page]);
   useEffect(() => {
     let active = true;
     let inFlight = false;
     const params = new URLSearchParams({ folder, page: String(page) });
     if (selectedMailbox) params.set('mailbox_id', String(selectedMailbox));
     if (query.trim()) params.set('q', query.trim());
-
     const loadMessages = async (background = false) => {
-      // One request at a time. Never poll a hidden tab; refresh immediately
-      // when it becomes visible again.
       if (!active || inFlight || (background && document.visibilityState === 'hidden')) return;
       inFlight = true;
-      if (!background) {
-        setLoading(true);
-        setError('');
-      }
+      if (!background) { setLoading(true); setError(''); }
       try {
-        const data = await api(`/messages?${params.toString()}`);
+        const data = await api('/messages?' + params.toString());
         if (!active) return;
         setMessages(data.messages || []);
         setPagination(data.pagination || { current_page: 1, last_page: 1, total: 0 });
+        const ids = new Set((data.messages || []).map((m) => Number(m.id)));
+        setSelectedIds((previous) => previous.filter((id) => ids.has(id)));
         setError('');
       } catch (err) {
         if (!active) return;
         if (err.status === 401) onExpired();
-        // Keep existing emails visible if a background request fails.
         if (!background) setError('Unable to load messages. Please try again.');
       } finally {
         inFlight = false;
         if (active && !background) setLoading(false);
       }
     };
-
-    // Initial load and manual refresh use the regular loading state.
     loadMessages();
-
-    // Only the Inbox polls; other folders still load on navigation and via
-    // their manual Refresh button. Compose can remain open above the inbox.
     let timer;
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') loadMessages(true);
-    };
+    const onVisibilityChange = () => { if (document.visibilityState === 'visible') loadMessages(true); };
     if (folder === 'inbox') {
       timer = window.setInterval(() => loadMessages(true), 60_000);
       document.addEventListener('visibilitychange', onVisibilityChange);
@@ -230,41 +229,91 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, onExpired, o
     };
   }, [folder, selectedMailbox, query, page, refreshKey, onExpired]);
 
+  const doAction = async (action, ids) => {
+    if (busy || ids.length === 0) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await api('/messages/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+        body: JSON.stringify({ action, ids }),
+      });
+      setSelectedIds([]);
+      setNotice(result.message || 'Messages updated.');
+      setRefreshKey((value) => value + 1);
+      onMutation();
+    } catch (err) {
+      if (err.status === 401) onExpired();
+      setError(err.message || 'The action failed. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toggleSelected = (id, checked) => {
+    setSelectedIds((previous) => checked ? [...new Set([...previous, id])] : previous.filter((item) => item !== id));
+  };
+
   return (
     <section className="panel mail-panel" aria-label={folderTitle + ' messages'}>
       <div className="mail-list-toolbar">
         <div className="mail-list-heading">
           <h2>{folderTitle}</h2>
-          <p>{selectedAddress || 'All mailboxes'}{query ? ` · Searching for “${query}”` : ''}</p>
+          <p>{selectedAddress || 'All mailboxes'}{query ? ' · Results for “' + query + '”' : ''}</p>
         </div>
         <div className="mail-list-tools">
-          {folder === 'inbox' && <span className="mail-count" title="The inbox refreshes every 60 seconds while this tab is active">Auto-refresh · 60s</span>}
-          <span className="mail-count" aria-live="polite">{loading ? 'Loading…' : `${pagination.total} message${pagination.total === 1 ? '' : 's'}`}</span>
-          <button type="button" className="mail-icon-button" title="Refresh messages" aria-label="Refresh messages" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><MailIcon name="refresh" size={19} /></button>
+          <span className="mail-count" aria-live="polite">{loading ? 'Loading…' : pagination.total + ' message' + (pagination.total === 1 ? '' : 's')}</span>
+          <button type="button" className="mail-icon-button" title="Refresh messages" aria-label="Refresh messages" disabled={loading || busy} onClick={() => setRefreshKey((value) => value + 1)}><MailIcon name="refresh" size={18} /></button>
         </div>
       </div>
-      {error ? <div className="mail-error"><div className="form-alert error" role="alert">{error}</div><button type="button" className="compose-secondary" onClick={() => setRefreshKey((value) => value + 1)}>Try again</button></div> : loading ? <div className="empty"><p>Loading messages…</p></div> : messages.length === 0 ? (
-        <div className="empty"><div className="empty-icon"><MailIcon name="inbox" size={34} /></div><h3>{query ? 'No matching messages' : 'Your mailbox is clear'}</h3><p>{query ? 'Try a different search in this folder.' : 'Messages will appear here when they arrive.'}</p></div>
-      ) : (
+      <div className="mail-actionbar">
+        <label className="mail-select-all" title="Select all messages on this page">
+          <input type="checkbox" aria-label="Select all messages on this page" checked={allSelected} disabled={loading || busy || visibleIds.length === 0} onChange={(event) => setSelectedIds(event.target.checked ? visibleIds : [])} />
+        </label>
+        {selectedIds.length > 0 ? (
+          <>
+            <span className="mail-selection-count">{selectedIds.length} selected</span>
+            {folder === 'inbox' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('archive', selectedIds)}><MailIcon name="archive" size={17} />Archive</button>}
+            {folder !== 'trash' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('trash', selectedIds)}><MailIcon name="trash" size={17} />Delete</button>}
+            {folder === 'trash' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('restore', selectedIds)}><MailIcon name="restore" size={17} />Restore</button>}
+            <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('read', selectedIds)}><MailIcon name="mailopen" size={17} />Mark read</button>
+            <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('unread', selectedIds)}><MailIcon name="mail" size={17} />Mark unread</button>
+            <button className="mail-toolbar-action clear-selection" type="button" disabled={busy} onClick={() => setSelectedIds([])}>Clear</button>
+          </>
+        ) : <span className="mail-action-hint">{folder === 'trash' ? 'Deleted messages can be restored' : 'Select messages for bulk actions'}</span>}
+      </div>
+      {notice && <div className="mail-inline-notice" role="status">{notice}</div>}
+      {error && <div className="mail-error"><div className="form-alert error" role="alert">{error}</div><button type="button" className="compose-secondary" onClick={() => setRefreshKey((value) => value + 1)}>Try again</button></div>}
+      {loading ? <div className="empty"><p>Loading messages…</p></div> : !error && messages.length === 0 ? (
+        <div className="empty"><div className="empty-icon"><MailIcon name={folder === 'trash' ? 'trash' : 'inbox'} size={34} /></div><h3>{query ? 'No matching messages' : folder === 'trash' ? 'Trash is empty' : 'Your mailbox is clear'}</h3><p>{query ? 'Try a different search in this folder.' : folder === 'trash' ? 'Messages you delete will be moved here.' : 'Messages will appear here when they arrive.'}</p></div>
+      ) : !error && (
         <>
           <div className="message-list">
             {messages.map((message) => {
-              const recipientRow = folder === 'sent' || folder === 'drafts';
+              const id = Number(message.id);
+              const recipientRow = folder === 'sent' || folder === 'drafts' || (folder === 'trash' && message.direction !== 'incoming');
               const contactEmail = recipientRow ? message.to_contact_email : message.from_address;
               const contactName = recipientRow ? message.to_contact_name : message.from_name;
               const otherRecipients = recipientRow ? Math.max(0, (message.to_recipient_count || 0) - 1) : 0;
               const snippet = message.delivery_status === 'unknown' ? 'Delivery not confirmed — do not resend automatically' : message.preview_text || '';
               return (
-                <button key={message.id} type="button" className={`message-row message-row-button ${message.is_read ? '' : 'unread'}`} onClick={() => folder === 'drafts' ? onOpenDraft(message.id) : onOpenMessage(message.id)} aria-label={`Open: ${message.subject || '(no subject)'}`}>
-                  <span className={`mail-star ${message.is_starred ? 'is-starred' : ''}`} aria-hidden="true">{message.is_starred ? '★' : '☆'}</span>
-                  <MailContact name={contactName} email={contactEmail} mailbox={message.mailbox_address} otherRecipients={otherRecipients} messageId={message.id} />
-                  <span className="message-summary"><strong>{message.subject || '(no subject)'}</strong><span className="message-preview">{snippet ? ' — ' + snippet : ''}</span></span>
-                  <time>{formatMessageDate(message.received_at || message.sent_at || message.created_at)}</time>
-                </button>
+                <div key={message.id} className={'message-row mail-list-entry ' + (message.is_read ? 'read' : 'unread') + (selectedIds.includes(id) ? ' selected' : '')}>
+                  <label className="mail-row-select" title="Select message"><input type="checkbox" checked={selectedIds.includes(id)} disabled={busy} onChange={(event) => toggleSelected(id, event.target.checked)} aria-label={'Select message: ' + (message.subject || '(no subject)')} /></label>
+                  <button type="button" className={'mail-star-button ' + (message.is_starred ? 'is-starred' : '')} title={message.is_starred ? 'Remove star' : 'Star message'} aria-label={message.is_starred ? 'Remove star' : 'Star message'} disabled={busy} onClick={() => doAction(message.is_starred ? 'unstar' : 'star', [id])}>{message.is_starred ? '★' : '☆'}</button>
+                  <button type="button" className="message-open" onClick={() => folder === 'drafts' ? onOpenDraft(message.id) : onOpenMessage(message.id)} title={message.subject || '(no subject)'}>
+                    <MailContact name={contactName} email={contactEmail} mailbox={message.mailbox_address} otherRecipients={otherRecipients} messageId={message.id} />
+                    <span className="message-summary"><strong>{message.subject || '(no subject)'}</strong><span className="message-preview">{snippet ? ' — ' + snippet : ''}</span></span>
+                    <time>{formatMessageDate(message.received_at || message.sent_at || message.created_at)}</time>
+                  </button>
+                  <div className="mail-row-actions">
+                    <button type="button" title={folder === 'trash' ? 'Restore' : 'Move to Trash'} aria-label={folder === 'trash' ? 'Restore message' : 'Delete message'} disabled={busy} onClick={() => doAction(folder === 'trash' ? 'restore' : 'trash', [id])}><MailIcon name={folder === 'trash' ? 'restore' : 'trash'} size={17} /></button>
+                  </div>
+                </div>
               );
             })}
           </div>
-          {pagination.last_page > 1 && <div className="pagination"><span>{`Page ${page} of ${pagination.last_page}`}</span><button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><button type="button" disabled={page >= pagination.last_page} onClick={() => setPage((value) => value + 1)}>Next</button></div>}
+          {pagination.last_page > 1 && <div className="pagination"><span>{'Page ' + page + ' of ' + pagination.last_page}</span><button type="button" disabled={page <= 1 || busy} onClick={() => setPage((value) => value - 1)}>Previous</button><button type="button" disabled={page >= pagination.last_page || busy} onClick={() => setPage((value) => value + 1)}>Next</button></div>}
         </>
       )}
     </section>
@@ -286,6 +335,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadRefreshKey, setUnreadRefreshKey] = useState(0);
   const onMessageRead = useCallback(() => setUnreadRefreshKey((value) => value + 1), []);
+  const onMessageMutation = useCallback(() => setUnreadRefreshKey((value) => value + 1), []);
   const [openedMessageId, setOpenedMessageId] = useState(() => { const id = new URLSearchParams(window.location.search).get('message'); return id && /^[1-9][0-9]*$/.test(id) ? id : null; });
 
   const refresh = useCallback(async () => {
@@ -411,7 +461,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
           <div className="workspace-heading"><div><h1>{folderInfo.title}</h1><p className="intro">{isSettings ? 'Manage the domains and addresses connected to your inbox.' : selectedMailbox ? `Viewing messages for ${mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address || 'selected mailbox'}` : 'Your mail, organized in one place.'}</p></div></div>
           {setupError && <div className="form-alert error" role="alert">{setupError}</div>}
           {sendNotice && <div className="form-alert success" role="status">{sendNotice}</div>}
-          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} onRead={onMessageRead} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} query={searchQuery} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} />}
+          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} onRead={onMessageRead} onAction={async (action, id) => { const result = await api("/messages/actions", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": csrf }, body: JSON.stringify({ action, ids: [Number(id)] }) }); onMessageMutation(); closeMessage(); return result; }} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} query={searchQuery} csrf={csrf} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} onMutation={onMessageMutation} />}
           {isSettings && <details className="workspace-system"><summary>System health</summary><div className="status-grid"><div className="status-card"><div>Laravel API</div><strong>{apiStatus.status}</strong><span>Backend service</span></div><div className="status-card"><div>PostgreSQL</div><strong>{apiStatus.database}</strong><span>Private database</span></div><div className="status-card"><div>Mailboxes</div><strong>{mailboxes.length}</strong><span>Configured addresses</span></div></div><p className="notice">Incoming mail uses Cloudflare R2. Outgoing mail uses your configured SMTP provider.</p></details>}
         </main>
       </div>
