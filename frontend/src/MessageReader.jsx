@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // Load the PDF parser only when someone actually opens a PDF preview.
 const PdfAttachmentPreview = React.lazy(() => import('./PdfAttachmentPreview.jsx'));
 
-export default function MessageReader({ messageId, csrf, onBack, onExpired }) {
+export default function MessageReader({ messageId, csrf, onBack, onExpired, onReply }) {
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -159,7 +159,11 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired }) {
     <section className="panel message-detail" aria-label="Read email">
       <div className="message-toolbar">
         <button type="button" className="message-back" onClick={onBack}>← Back to messages</button>
-        <span className="setup-status">Private email</span>
+        <div className="message-toolbar-actions">
+          {message && <button type="button" className="message-back" onClick={() => onReply(message)}>↩ Reply</button>}
+          {message && <button type="button" className="message-back" onClick={() => onReply(message, true)}>↪ Forward text</button>}
+          <span className="setup-status">Private email</span>
+        </div>
       </div>
       {loading ? <div className="empty"><p>Loading email…</p></div> : error ? (
         <div className="message-load-error"><div className="form-alert error" role="alert">{error}</div><button type="button" className="message-back" onClick={onBack}>Back to messages</button></div>
@@ -170,6 +174,8 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired }) {
             <div><dt>From</dt><dd>{message.from || 'Unknown sender'}</dd></div>
             <div><dt>To</dt><dd>{message.to || message.mailbox_address}</dd></div>
             {message.cc && <div><dt>Cc</dt><dd>{message.cc}</dd></div>}
+            {message.bcc && message.direction !== 'incoming' && <div><dt>Bcc</dt><dd>{message.bcc}</dd></div>}
+            {message.delivery_status && <div><dt>Delivery</dt><dd>{message.delivery_status === 'accepted' ? 'Accepted by outbound provider' : message.delivery_status}</dd></div>}
             <div><dt>Mailbox</dt><dd>{message.mailbox_address}</dd></div>
           </dl>
           <div className="message-body">

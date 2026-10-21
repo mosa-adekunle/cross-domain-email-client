@@ -28,6 +28,12 @@ jobs:
         run: composer install --working-dir=backend --no-interaction --no-progress --prefer-dist --no-dev
       - name: MIME attachment decode and security smoke tests
         run: php backend/tests/attachment-smoke.php
+      - name: Outbound email validation smoke tests
+        run: php backend/tests/outbound-smoke.php
+      - name: Laravel outgoing route registration
+        run: |
+          php backend/artisan route:list --path=api/drafts
+          php backend/artisan route:list --path=api/outbound
       - name: Frontend production build
         run: |
           npm install --prefix frontend --no-audit --no-fund

@@ -285,3 +285,8 @@ PDFs are rendered locally with [Mozilla PDF.js](https://mozilla.github.io/pdf.js
 ### PDF worker production MIME verification
 
 Production Nginx explicitly serves generated `.mjs` worker files with the JavaScript MIME type required by Chrome; missing module files return 404 rather than the SPA HTML page. The automated GitHub build smoke-tests the web image and the live-server command is `bash scripts/verify-pdf-worker.sh`. See [attachments](docs/attachments.md).
+
+
+## SMTP sending, Compose and Drafts (October 2026)
+
+[Outgoing mail setup](docs/outbound-smtp.md) covers Compose, To/CC/BCC, Reply/Forward text, saved Drafts, Sent, and provider-acceptance tracking. Sending is **disabled by default** until dedicated SMTP credentials and explicitly verified sender domains are configured on the EC2 host. No Cloudflare, R2, Terraform, or IAM changes are required. For receiptboss.ca, separately credentialed Resend SMTP is an option. Outbound attachments and rich-text composing remain future stages.

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import MessageReader from './MessageReader.jsx';
+import ComposeMail from './ComposeMail.jsx';
 
 const folders = [
   { label: 'Unified inbox', folder: 'inbox', icon: '▤' },
@@ -116,12 +117,12 @@ function DomainSettings({ domains, mailboxes, refresh, csrf, onExpired }) {
       </section>
       {error && <div className="form-alert error" role="alert">{error}</div>}
       {success && <div className="form-alert success" role="status">{success}</div>}
-      <p className="notice">Adding domains or mailboxes here never changes Cloudflare MX records, creates R2 buckets, or sends/receives email. Those integrations come next.</p>
+      <p className="notice">Adding domains or mailboxes here does not change Cloudflare MX records, create R2 buckets, or send a message. Outbound sending is enabled separately by verified SMTP credentials on the server.</p>
     </div>
   );
 }
 
-function MessagesPanel({ folder, mailboxes, selectedMailbox, onExpired, onOpenMessage }) {
+function MessagesPanel({ folder, mailboxes, selectedMailbox, onExpired, onOpenMessage, onOpenDraft }) {
   const [messages, setMessages] = useState([]);
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [page, setPage] = useState(1);
@@ -157,9 +158,9 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, onExpired, onOpenMe
       ) : (
         <>
           <div className="message-list">
-            {messages.map((message) => <button key={message.id} type="button" className={`message-row message-row-button ${message.is_read ? '' : 'unread'}`} onClick={() => onOpenMessage(message.id)} aria-label={`Read: ${message.subject || '(no subject)'}`}>
-              <span className="message-sender">{message.from_name || message.from_address || 'Unknown sender'}<small>{message.mailbox_address}</small></span>
-              <span className="message-summary"><strong>{message.subject || '(no subject)'}</strong><small>{message.preview_text || 'No preview available'}</small></span>
+            {messages.map((message) => <button key={message.id} type="button" className={`message-row message-row-button ${message.is_read ? '' : 'unread'}`} onClick={() => folder === 'drafts' ? onOpenDraft(message.id) : onOpenMessage(message.id)} aria-label={`Read: ${message.subject || '(no subject)'}`}>
+              <span className="message-sender">{folder === 'sent' || folder === 'drafts' ? (message.to_recipients ? 'To: ' + message.to_recipients : '(no recipients)') : (message.from_name || message.from_address || 'Unknown sender')}<small>{message.mailbox_address}</small></span>
+              <span className="message-summary"><strong>{message.subject || '(no subject)'}</strong><small>{message.preview_text || (message.delivery_status === 'unknown' ? 'Delivery not confirmed — do not resend automatically' : 'No preview available')}</small></span>
               <time>{message.received_at || message.sent_at ? new Date(message.received_at || message.sent_at).toLocaleDateString() : ''}</time>
             </button>)}
           </div>
@@ -172,6 +173,8 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, onExpired, onOpenMe
 
 export default function Workspace({ user, csrf, onLogout, signingOut, onExpired }) {
   const [activeFolder, setActiveFolder] = useState('Unified inbox');
+  const [composer, setComposer] = useState(null);
+  const [sendNotice, setSendNotice] = useState('');
   const [apiStatus, setApiStatus] = useState({ status: 'checking', database: 'checking' });
   const [domains, setDomains] = useState([]);
   const [mailboxes, setMailboxes] = useState([]);
@@ -221,6 +224,17 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   };
 
   const folderInfo = folders.find((item) => item.label === activeFolder);
+  const startCompose = (options = {}) => { closeMessage(); setSendNotice(''); setComposer(options); };
+  const openReply = (message, forward = false) => {
+    const fromMailbox = mailboxes.find((m) => String(m.address).toLowerCase() === String(message.mailbox_address).toLowerCase());
+    startCompose({ initial: {
+      mailbox_id: fromMailbox?.id || selectedMailbox || mailboxes[0]?.id,
+      to: forward ? '' : message.from_address || '',
+      subject: (forward ? 'Fwd: ' : 'Re: ') + String(message.subject || '(no subject)').replace(/^(?:Re:\s*|Fwd:\s*)+/i, ''),
+      body_text: '\n\n---- Original message ----\nFrom: ' + (message.from || '') + '\nDate: ' + (message.received_at || message.sent_at || '') + '\nSubject: ' + (message.subject || '') + '\n\n' + (message.body || ''),
+      in_reply_to: forward ? '' : message.internet_message_id || '',
+    }});
+  };
   const isSettings = activeFolder === 'Settings';
   const isReady = apiStatus.status === 'ready';
   return (
@@ -229,8 +243,9 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
         <div className="identity"><div className="brand-icon">✉</div><div><div className="brand-name">Cross Domain</div><div className="brand-subtitle">Email client</div></div></div>
         <div className="section-label">WORKSPACE</div>
         <nav aria-label="Mail folders">
-          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} onClick={() => { setActiveFolder(item.label); closeMessage(); }}><span aria-hidden="true">{item.icon}</span><span>{item.label}</span></button>)}
+          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} onClick={() => { setActiveFolder(item.label); setComposer(null); setSendNotice(''); closeMessage(); }}><span aria-hidden="true">{item.icon}</span><span>{item.label}</span></button>)}
         </nav>
+        <button type="button" className="sidebar-compose" onClick={() => startCompose()} disabled={!mailboxes.length}>＋ Compose</button>
         <div className="section-label mailbox-label">MAILBOXES</div>
         <nav aria-label="Mailboxes" className="mailbox-nav">
           <button type="button" className={`mailbox-link ${selectedMailbox === '' ? 'selected' : ''}`} onClick={() => { setSelectedMailbox(''); if (isSettings) setActiveFolder('Unified inbox'); closeMessage(); }}>All mailboxes</button>
@@ -240,19 +255,20 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
         <div className="sidebar-bottom"><div className="server-dot" /><span>Signed in as {user.name}</span></div>
       </aside>
       <div className="main">
-        <header className="topbar"><div className="breadcrumb">Email <span>/</span> {activeFolder}{openedMessageId && !isSettings ? ' / Read message' : ''}</div><div className="topbar-actions"><div className={`api-pill ${isReady ? 'ready' : ''}`} role="status"><span className="server-dot" />{isReady ? 'API connected' : 'API unavailable'}</div><button className="signout-button" type="button" onClick={onLogout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button></div></header>
+        <header className="topbar"><div className="breadcrumb">Email <span>/</span> {activeFolder}{composer ? ' / Compose' : openedMessageId && !isSettings ? ' / Read message' : ''}</div><div className="topbar-actions"><div className={`api-pill ${isReady ? 'ready' : ''}`} role="status"><span className="server-dot" />{isReady ? 'API connected' : 'API unavailable'}</div><button className="signout-button" type="button" onClick={onLogout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button></div></header>
         <main className="content">
           <p className="eyebrow">SECURE WORKSPACE</p>
-          <h1>{openedMessageId && !isSettings ? 'Read message' : activeFolder}</h1>
-          <p className="intro">{isSettings ? 'Manage your domains and mailboxes.' : openedMessageId ? 'Read your archived email securely.' : 'Read imported email from your configured mailboxes in one private workspace.'}</p>
+          <h1>{composer ? 'Compose email' : openedMessageId && !isSettings ? 'Read message' : activeFolder}</h1>
+          <p className="intro">{isSettings ? 'Manage your domains and mailboxes.' : composer ? 'Write, save, and send from a configured domain.' : openedMessageId ? 'Read your email securely.' : 'Read imported email from your configured mailboxes in one private workspace.'}</p>
           {setupError && <div className="form-alert error" role="alert">{setupError}</div>}
-          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} onExpired={onExpired} onOpenMessage={openMessage} />}
-          {!openedMessageId && <div className="status-grid">
+          {sendNotice && <div className="form-alert success" role="status">{sendNotice}</div>}
+          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : composer ? <ComposeMail key={composer.draftId || 'new'} csrf={csrf} mailboxes={mailboxes} selectedMailbox={selectedMailbox} draftId={composer.draftId || null} initial={composer.initial} onClose={() => setComposer(null)} onExpired={onExpired} onSent={(receipt) => { setComposer(null); setActiveFolder('Sent'); setSendNotice(receipt.message); }} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} />}
+          {!openedMessageId && !composer && <div className="status-grid">
             <div className="status-card"><div>Laravel API</div><strong>{apiStatus.status}</strong><span>Backend service health</span></div>
             <div className="status-card"><div>PostgreSQL</div><strong>{apiStatus.database}</strong><span>Private persistent database</span></div>
             <div className="status-card"><div>Configured mailboxes</div><strong>{mailboxes.length}</strong><span>Configured addresses</span></div>
           </div>}
-          {!openedMessageId && <p className="notice">Receiving is managed through Cloudflare. Outbound delivery is not configured yet.</p>}
+          {!openedMessageId && !composer && <p className="notice">Receiving uses Cloudflare R2. Outbound sending uses explicitly configured SMTP credentials and verified sending domains.</p>}
         </main>
       </div>
     </div>

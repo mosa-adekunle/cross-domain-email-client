@@ -22,10 +22,11 @@ class MessageDetailController
             ->where('m.id', $id)
             ->whereNull('m.deleted_at')
             ->select(
-                'm.id', 'b.address as mailbox_address', 'm.folder',
+                'm.id', 'm.mailbox_id', 'b.address as mailbox_address', 'm.folder',
                 'm.from_address', 'm.from_name', 'm.subject', 'm.preview_text',
                 'm.received_at', 'm.sent_at', 'm.created_at', 'm.is_read',
                 'm.draft_body_text', 'm.draft_body_html', 'm.incoming_object_id',
+                'm.internet_message_id', 'm.in_reply_to', 'm.delivery_status', 'm.direction',
                 'o.r2_bucket', 'o.r2_object_key', 'o.size_bytes'
             )->first();
 
@@ -38,6 +39,7 @@ class MessageDetailController
             ->get(['type', 'address']);
         $to = $recipients->where('type', 'to')->pluck('address')->implode(', ');
         $cc = $recipients->where('type', 'cc')->pluck('address')->implode(', ');
+        $bcc = $recipients->where('type', 'bcc')->pluck('address')->implode(', ');
         $from = trim((string) ($message->from_name ?? '')) ?: (string) ($message->from_address ?? '');
         $body = (string) ($message->draft_body_text ?? '');
         $attachments = [];
@@ -76,6 +78,16 @@ class MessageDetailController
                 'from' => $from,
                 'to' => $to,
                 'cc' => $cc,
+                'bcc' => $bcc,
+                'to_addresses' => $recipients->where('type', 'to')->pluck('address')->values()->all(),
+                'cc_addresses' => $recipients->where('type', 'cc')->pluck('address')->values()->all(),
+                'bcc_addresses' => $recipients->where('type', 'bcc')->pluck('address')->values()->all(),
+                'from_address' => $message->from_address,
+                'mailbox_id' => $message->mailbox_id ?? null,
+                'direction' => $message->direction,
+                'delivery_status' => $message->delivery_status,
+                'internet_message_id' => $message->internet_message_id,
+                'in_reply_to' => $message->in_reply_to,
                 'mailbox_address' => $message->mailbox_address,
                 'folder' => $message->folder,
                 'received_at' => $message->received_at,

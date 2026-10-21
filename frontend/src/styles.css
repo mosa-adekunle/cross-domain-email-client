@@ -192,3 +192,35 @@ h1 { font-size: 35px; font-weight: 750; letter-spacing: -1.1px; margin: 13px 0; 
   .attachment-pdf-control-spacer { flex-basis: 100%; }
   .attachment-pdf-canvas-scroll { justify-content: flex-start; }
 }
+
+
+/* Outbound composer, drafts, and sending status */
+.sidebar-compose { margin: 1px 9px 15px; padding: 12px 14px; border: none; border-radius: 9px; color: #fff; background: #3867f6; text-align: left; font-weight: 750; font-size: 13px; }
+.sidebar-compose:hover:not(:disabled) { background: #2455e4; }
+.sidebar-compose:disabled { opacity: .5; cursor: not-allowed; }
+.compose-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #edf1f6; padding: 24px 28px; }
+.compose-header h2 { font-size: 18px; margin: 0 0 8px; }
+.compose-header p { font-size: 12px; color: #75859f; margin: 0; }
+.compose-fields { padding: 26px 28px 29px; display: grid; gap: 11px; }
+.compose-fields label { color: #394a65; font-size: 12px; font-weight: 720; }
+.compose-fields input, .compose-fields select, .compose-fields textarea { width: 100%; border: 1px solid #ccd7e8; border-radius: 8px; padding: 12px 13px; font: inherit; font-size: 13px; color: #233450; background: #fff; min-width: 0; }
+.compose-fields textarea { resize: vertical; min-height: 240px; line-height: 1.65; }
+.compose-fields :is(input, select, textarea):focus { outline: 2px solid #89a4ff; border-color: #5276ec; }
+.compose-fields :is(input, select, textarea):disabled { background: #f7f9fd; color: #7e899d; }
+.compose-two { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
+.compose-two > div { display: grid; gap: 10px; }
+.compose-hint { margin: 0; color: #7e8ba1; font-size: 11px; line-height: 1.6; }
+.compose-warning { padding: 13px 15px; color: #825414; background: #fff5e4; border: 1px solid #ffe0a3; border-radius: 8px; font-size: 12px; line-height: 1.65; }
+.compose-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 5px; }
+.compose-secondary { background: white; border: 1px solid #cbd7ed; border-radius: 8px; color: #2c50a6; padding: 10px 14px; font-size: 12px; font-weight: 700; }
+.compose-secondary:hover:not(:disabled) { background: #f2f5fc; }
+.compose-secondary:disabled { opacity: .6; cursor: not-allowed; }
+.compose-actions .primary-button { padding: 11px 21px; font-size: 13px; }
+.message-toolbar-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .sidebar-compose { margin: 8px 0 16px; }
+  .compose-header { flex-direction: column; align-items: flex-start; padding: 20px; }
+  .compose-fields { padding: 21px 18px; }
+  .compose-two { grid-template-columns: 1fr; gap: 11px; }
+  .message-toolbar-actions { gap: 5px; }
+}
