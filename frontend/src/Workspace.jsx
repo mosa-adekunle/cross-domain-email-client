@@ -34,6 +34,26 @@ function formatMessageDate(value) {
     : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+function MailContact({ name, email, mailbox, otherRecipients = 0, messageId }) {
+  const display = name || email || 'Unknown sender';
+  const initial = display.slice(0, 1).toLocaleUpperCase();
+  return (
+    <span className="message-sender mail-contact">
+      <span className="contact-display">{display}{otherRecipients > 0 ? `, +${otherRecipients}` : ''}</span>
+      <small>{mailbox}</small>
+      {email && <span className="contact-card" id={`mail-contact-${messageId}`} role="tooltip">
+        <span className="contact-avatar">{initial}</span>
+        <span className="contact-details">
+          <strong>{display}</strong>
+          <span className="contact-email">{email}</span>
+          <span className="contact-hint">{name ? 'Display name provided in email' : 'No display name available'}</span>
+          {otherRecipients > 0 && <span className="contact-hint">Plus {otherRecipients} additional recipient{otherRecipients === 1 ? '' : 's'}</span>}
+        </span>
+      </span>}
+    </span>
+  );
+}
+
 async function api(path, options = {}) {
   const { headers, ...rest } = options;
   const response = await fetch(`/api${path}`, {
@@ -230,12 +250,14 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, onExpired, o
           <div className="message-list">
             {messages.map((message) => {
               const recipientRow = folder === 'sent' || folder === 'drafts';
-              const sender = recipientRow ? (message.to_recipients ? 'To: ' + message.to_recipients : '(no recipients)') : (message.from_name || message.from_address || 'Unknown sender');
+              const contactEmail = recipientRow ? message.to_contact_email : message.from_address;
+              const contactName = recipientRow ? message.to_contact_name : message.from_name;
+              const otherRecipients = recipientRow ? Math.max(0, (message.to_recipient_count || 0) - 1) : 0;
               const snippet = message.delivery_status === 'unknown' ? 'Delivery not confirmed — do not resend automatically' : message.preview_text || '';
               return (
                 <button key={message.id} type="button" className={`message-row message-row-button ${message.is_read ? '' : 'unread'}`} onClick={() => folder === 'drafts' ? onOpenDraft(message.id) : onOpenMessage(message.id)} aria-label={`Open: ${message.subject || '(no subject)'}`}>
                   <span className={`mail-star ${message.is_starred ? 'is-starred' : ''}`} aria-hidden="true">{message.is_starred ? '★' : '☆'}</span>
-                  <span className="message-sender" title={sender}>{sender}<small>{message.mailbox_address}</small></span>
+                  <MailContact name={contactName} email={contactEmail} mailbox={message.mailbox_address} otherRecipients={otherRecipients} messageId={message.id} />
                   <span className="message-summary"><strong>{message.subject || '(no subject)'}</strong><span className="message-preview">{snippet ? ' — ' + snippet : ''}</span></span>
                   <time>{formatMessageDate(message.received_at || message.sent_at || message.created_at)}</time>
                 </button>
@@ -261,6 +283,8 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   const [selectedMailbox, setSelectedMailbox] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadRefreshKey, setUnreadRefreshKey] = useState(0);
   const [openedMessageId, setOpenedMessageId] = useState(() => { const id = new URLSearchParams(window.location.search).get('message'); return id && /^[1-9][0-9]*$/.test(id) ? id : null; });
 
   const refresh = useCallback(async () => {
@@ -282,6 +306,35 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     api('/status').then(setApiStatus).catch(() => setApiStatus({ status: 'unavailable', database: 'unavailable' }));
     refresh().catch(() => {});
   }, [refresh]);
+
+  useEffect(() => {
+    let active = true;
+    let fetching = false;
+    const params = new URLSearchParams();
+    if (selectedMailbox) params.set('mailbox_id', String(selectedMailbox));
+    const checkUnread = async () => {
+      if (!active || fetching || document.visibilityState === 'hidden') return;
+      fetching = true;
+      try {
+        const response = await api('/messages/unread-count' + (params.size ? '?' + params.toString() : ''));
+        if (active) setUnreadCount(Math.max(0, Number(response.unread_count) || 0));
+      } catch (err) {
+        if (active && err.status === 401) onExpired();
+        // Keep the last known count when the network is temporarily down.
+      } finally {
+        fetching = false;
+      }
+    };
+    checkUnread();
+    const timer = window.setInterval(checkUnread, 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') checkUnread(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [selectedMailbox, unreadRefreshKey, onExpired]);
 
   useEffect(() => {
     const sync = () => { const id = new URLSearchParams(window.location.search).get('message'); setOpenedMessageId(id && /^[1-9][0-9]*$/.test(id) ? id : null); };
@@ -328,10 +381,10 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="identity"><div className="brand-icon"><MailIcon name="inbox" size={25} /></div><div><div className="brand-name">Cross Domain</div><div className="brand-subtitle">Mail</div></div></div>
+        <div className="identity"><div className="brand-icon"><MailIcon name="inbox" size={25} /></div><div><div className="brand-name">Made North<br />Technologies</div><div className="brand-subtitle">Mail</div></div></div>
         <button type="button" className="sidebar-compose" onClick={() => startCompose()} disabled={!mailboxes.length}><MailIcon name="compose" size={21} /><span>Compose</span></button>
         <nav aria-label="Mail folders" className="folder-nav">
-          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} aria-current={activeFolder === item.label ? 'page' : undefined} onClick={() => selectFolder(item.label)}><MailIcon name={item.icon} size={19}/><span>{item.title}</span></button>)}
+          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} aria-current={activeFolder === item.label ? 'page' : undefined} onClick={() => selectFolder(item.label)}><MailIcon name={item.icon} size={19}/><span>{item.title}</span>{item.folder === 'inbox' && unreadCount > 0 && <span className="nav-unread-count" aria-label={`${unreadCount} new messages`}>({unreadCount} new)</span>}</button>)}
         </nav>
         <div className="section-label mailbox-label">MAILBOXES</div>
         <nav aria-label="Mailboxes" className="mailbox-nav">
@@ -357,7 +410,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
           <div className="workspace-heading"><div><h1>{folderInfo.title}</h1><p className="intro">{isSettings ? 'Manage the domains and addresses connected to your inbox.' : selectedMailbox ? `Viewing messages for ${mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address || 'selected mailbox'}` : 'Your mail, organized in one place.'}</p></div></div>
           {setupError && <div className="form-alert error" role="alert">{setupError}</div>}
           {sendNotice && <div className="form-alert success" role="status">{sendNotice}</div>}
-          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} query={searchQuery} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} />}
+          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} onRead={() => setUnreadRefreshKey((value) => value + 1)} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} query={searchQuery} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} />}
           {isSettings && <details className="workspace-system"><summary>System health</summary><div className="status-grid"><div className="status-card"><div>Laravel API</div><strong>{apiStatus.status}</strong><span>Backend service</span></div><div className="status-card"><div>PostgreSQL</div><strong>{apiStatus.database}</strong><span>Private database</span></div><div className="status-card"><div>Mailboxes</div><strong>{mailboxes.length}</strong><span>Configured addresses</span></div></div><p className="notice">Incoming mail uses Cloudflare R2. Outgoing mail uses your configured SMTP provider.</p></details>}
         </main>
       </div>
