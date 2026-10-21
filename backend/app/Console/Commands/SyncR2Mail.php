@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\SenderIdentity;
 use Aws\S3\S3Client;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -255,7 +256,9 @@ class SyncR2Mail extends Command
         $subject = mb_substr((string) ($parsed->getSubject() ?? ''), 0, 998);
         $messageId = mb_substr((string) ($parsed->getHeaderValue('Message-ID') ?? ''), 0, 998);
         $replyToId = mb_substr((string) ($parsed->getHeaderValue('In-Reply-To') ?? ''), 0, 998);
-        $fromAddress = mb_substr((string) ($parsed->getHeaderValue('From') ?: ($metadata['envelope_from'] ?? '')), 0, 320);
+        $sender = SenderIdentity::fromMessage($parsed, (string) ($metadata['envelope_from'] ?? ''));
+        $fromAddress = $sender['email'];
+        $fromName = $sender['name'];
         $plain = (string) ($parsed->getTextContent() ?? '');
         if ($plain === '') $plain = strip_tags((string) ($parsed->getHtmlContent() ?? ''));
         $preview = mb_substr(trim(preg_replace('/\s+/u', ' ', $plain) ?? ''), 0, 500);
@@ -266,7 +269,7 @@ class SyncR2Mail extends Command
             $date = now();
         }
 
-        DB::transaction(function () use ($bucket, $key, $identity, $mailbox, $subject, $messageId, $replyToId, $fromAddress, $preview, $raw, $date): void {
+        DB::transaction(function () use ($bucket, $key, $identity, $mailbox, $subject, $messageId, $replyToId, $fromAddress, $fromName, $preview, $raw, $date): void {
             $now = now();
             DB::table('incoming_objects')->insertOrIgnore([
                 'object_identity_sha256' => $identity,
@@ -305,7 +308,7 @@ class SyncR2Mail extends Command
                 'folder' => 'inbox',
                 'internet_message_id' => $messageId !== '' ? $messageId : null,
                 'in_reply_to' => $replyToId !== '' ? $replyToId : null,
-                'from_address' => $fromAddress,
+                'from_address' => $fromAddress, 'from_name' => $fromName,
                 'subject' => $subject,
                 'preview_text' => $preview,
                 'received_at' => $date,
