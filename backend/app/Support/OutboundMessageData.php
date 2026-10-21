@@ -41,7 +41,9 @@ final class OutboundMessageData
         foreach ($list as $raw) {
             if (! is_string($raw)) continue;
             $address = trim($raw);
-            if ($address !== '') $out[strtolower($address)] = $address;
+            if ($address !== '' && ! isset($out[strtolower($address)])) {
+                $out[strtolower($address)] = $address;
+            }
         }
         return array_values($out);
     }
