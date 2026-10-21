@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // Load the PDF parser only when someone actually opens a PDF preview.
 const PdfAttachmentPreview = React.lazy(() => import('./PdfAttachmentPreview.jsx'));
 
-export default function MessageReader({ messageId, csrf, onBack, onExpired, onReply }) {
+export default function MessageReader({ messageId, csrf, onBack, onExpired, onReply, onRead }) {
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -139,6 +139,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
             headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrf },
           }).catch(() => null);
           if (active && update?.status === 401) onExpired();
+          if (active && update?.ok) onRead?.();
         }
       } catch (err) {
         if (!active) return;
@@ -148,7 +149,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
     }
     load();
     return () => { active = false; };
-  }, [messageId, csrf, onExpired]);
+  }, [messageId, csrf, onExpired, onRead]);
 
   const timestamp = message && (message.received_at || message.sent_at || message.created_at);
   const date = timestamp && !Number.isNaN(Date.parse(timestamp))
