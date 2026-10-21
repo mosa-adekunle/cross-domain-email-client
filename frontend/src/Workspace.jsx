@@ -3,12 +3,36 @@ import MessageReader from './MessageReader.jsx';
 import ComposeMail from './ComposeMail.jsx';
 
 const folders = [
-  { label: 'Unified inbox', folder: 'inbox', icon: '▤' },
-  { label: 'Sent', folder: 'sent', icon: '↗' },
-  { label: 'Drafts', folder: 'drafts', icon: '▱' },
-  { label: 'Archive', folder: 'archive', icon: '▣' },
-  { label: 'Settings', folder: 'settings', icon: '⚙' },
+  { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
+  { label: 'Sent', title: 'Sent', folder: 'sent', icon: 'sent' },
+  { label: 'Drafts', title: 'Drafts', folder: 'drafts', icon: 'drafts' },
+  { label: 'Archive', title: 'Archive', folder: 'archive', icon: 'archive' },
+  { label: 'Settings', title: 'Settings', folder: 'settings', icon: 'settings' },
 ];
+
+const iconPaths = {
+  inbox: 'M4 4h16l2 11v5H2v-5L4 4Zm-2 11h6l2 3h4l2-3h6',
+  sent: 'm22 2-7 20-4-9-9-4 20-7ZM22 2 11 13',
+  drafts: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5',
+  archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
+  settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm-1-13h2l.6 2.2 1.8.8 2-.9 1.5 1.5-.9 2  .8 1.8 2.2.6v2l-2.2.6-.8 1.8.9 2-1.5 1.5-2-.9-1.8.8-.6 2.2h-2l-.6-2.2-1.8-.8-2 .9-1.5-1.5.9-2-.8-1.8-2.2-.6v-2l2.2-.6.8-1.8-.9-2L6.5 3.6l2 .9 1.8-.8L11 2.5',
+  search: 'm21 21-4.5-4.5M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z',
+  refresh: 'M20 6v5h-5M4 18v-5h5M5.8 9A7 7 0 0 1 18 6l2 5M4 13l2 5a7 7 0 0 0 12-3',
+  compose: 'M12 20H4V4h10M9 15l10-10 2 2-10 10-4 1 1-4Z',
+  close: 'M18 6 6 18M6 6l12 12',
+};
+function MailIcon({ name, size = 20 }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={iconPaths[name]} /></svg>;
+}
+function formatMessageDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const today = new Date();
+  return date.toDateString() === today.toDateString()
+    ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
 
 async function api(path, options = {}) {
   const { headers, ...rest } = options;
@@ -122,20 +146,24 @@ function DomainSettings({ domains, mailboxes, refresh, csrf, onExpired }) {
   );
 }
 
-function MessagesPanel({ folder, mailboxes, selectedMailbox, onExpired, onOpenMessage, onOpenDraft }) {
+function MessagesPanel({ folder, mailboxes, selectedMailbox, query, onExpired, onOpenMessage, onOpenDraft }) {
   const [messages, setMessages] = useState([]);
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const selectedAddress = selectedMailbox ? mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address : null;
+  const folderTitle = folders.find((item) => item.folder === folder)?.title || 'Messages';
 
-  useEffect(() => { setPage(1); }, [folder, selectedMailbox]);
+  useEffect(() => { setPage(1); }, [folder, selectedMailbox, query]);
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError('');
     const params = new URLSearchParams({ folder, page: String(page) });
     if (selectedMailbox) params.set('mailbox_id', String(selectedMailbox));
+    if (query.trim()) params.set('q', query.trim());
     api(`/messages?${params.toString()}`).then((data) => {
       if (!active) return;
       setMessages(data.messages || []);
@@ -148,23 +176,40 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, onExpired, onOpenMe
       setLoading(false);
     });
     return () => { active = false; };
-  }, [folder, selectedMailbox, page, onExpired]);
+  }, [folder, selectedMailbox, query, page, refreshKey, onExpired]);
 
   return (
-    <section className="panel" aria-label="Messages">
-      <div className="panel-top"><div><h2>{loading ? 'Loading messages…' : `${pagination.total} message${pagination.total === 1 ? '' : 's'}`}</h2><p>{selectedMailbox ? mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address : 'All configured mailboxes'} · {folder}</p></div><SetupStatus>Private inbox</SetupStatus></div>
-      {error ? <div className="form-alert error" role="alert">{error}</div> : loading ? <div className="empty"><p>Loading your mailbox…</p></div> : messages.length === 0 ? (
-        <div className="empty"><div className="empty-icon">✉</div><h3>No messages yet</h3><p>No imported messages in this folder yet.</p></div>
+    <section className="panel mail-panel" aria-label={folderTitle + ' messages'}>
+      <div className="mail-list-toolbar">
+        <div className="mail-list-heading">
+          <h2>{folderTitle}</h2>
+          <p>{selectedAddress || 'All mailboxes'}{query ? ` · Searching for “${query}”` : ''}</p>
+        </div>
+        <div className="mail-list-tools">
+          <span className="mail-count" aria-live="polite">{loading ? 'Loading…' : `${pagination.total} message${pagination.total === 1 ? '' : 's'}`}</span>
+          <button type="button" className="mail-icon-button" title="Refresh messages" aria-label="Refresh messages" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><MailIcon name="refresh" size={19} /></button>
+        </div>
+      </div>
+      {error ? <div className="mail-error"><div className="form-alert error" role="alert">{error}</div><button type="button" className="compose-secondary" onClick={() => setRefreshKey((value) => value + 1)}>Try again</button></div> : loading ? <div className="empty"><p>Loading messages…</p></div> : messages.length === 0 ? (
+        <div className="empty"><div className="empty-icon"><MailIcon name="inbox" size={34} /></div><h3>{query ? 'No matching messages' : 'Your mailbox is clear'}</h3><p>{query ? 'Try a different search in this folder.' : 'Messages will appear here when they arrive.'}</p></div>
       ) : (
         <>
           <div className="message-list">
-            {messages.map((message) => <button key={message.id} type="button" className={`message-row message-row-button ${message.is_read ? '' : 'unread'}`} onClick={() => folder === 'drafts' ? onOpenDraft(message.id) : onOpenMessage(message.id)} aria-label={`Read: ${message.subject || '(no subject)'}`}>
-              <span className="message-sender">{folder === 'sent' || folder === 'drafts' ? (message.to_recipients ? 'To: ' + message.to_recipients : '(no recipients)') : (message.from_name || message.from_address || 'Unknown sender')}<small>{message.mailbox_address}</small></span>
-              <span className="message-summary"><strong>{message.subject || '(no subject)'}</strong><small>{message.preview_text || (message.delivery_status === 'unknown' ? 'Delivery not confirmed — do not resend automatically' : 'No preview available')}</small></span>
-              <time>{message.received_at || message.sent_at ? new Date(message.received_at || message.sent_at).toLocaleDateString() : ''}</time>
-            </button>)}
+            {messages.map((message) => {
+              const recipientRow = folder === 'sent' || folder === 'drafts';
+              const sender = recipientRow ? (message.to_recipients ? 'To: ' + message.to_recipients : '(no recipients)') : (message.from_name || message.from_address || 'Unknown sender');
+              const snippet = message.delivery_status === 'unknown' ? 'Delivery not confirmed — do not resend automatically' : message.preview_text || '';
+              return (
+                <button key={message.id} type="button" className={`message-row message-row-button ${message.is_read ? '' : 'unread'}`} onClick={() => folder === 'drafts' ? onOpenDraft(message.id) : onOpenMessage(message.id)} aria-label={`Open: ${message.subject || '(no subject)'}`}>
+                  <span className={`mail-star ${message.is_starred ? 'is-starred' : ''}`} aria-hidden="true">{message.is_starred ? '★' : '☆'}</span>
+                  <span className="message-sender" title={sender}>{sender}<small>{message.mailbox_address}</small></span>
+                  <span className="message-summary"><strong>{message.subject || '(no subject)'}</strong><span className="message-preview">{snippet ? ' — ' + snippet : ''}</span></span>
+                  <time>{formatMessageDate(message.received_at || message.sent_at || message.created_at)}</time>
+                </button>
+              );
+            })}
           </div>
-          {pagination.last_page > 1 && <div className="pagination"><button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {page} of {pagination.last_page}</span><button type="button" disabled={page >= pagination.last_page} onClick={() => setPage((value) => value + 1)}>Next</button></div>}
+          {pagination.last_page > 1 && <div className="pagination"><span>{`Page ${page} of ${pagination.last_page}`}</span><button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><button type="button" disabled={page >= pagination.last_page} onClick={() => setPage((value) => value + 1)}>Next</button></div>}
         </>
       )}
     </section>
@@ -181,6 +226,8 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   const [loadingSetup, setLoadingSetup] = useState(true);
   const [setupError, setSetupError] = useState('');
   const [selectedMailbox, setSelectedMailbox] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [openedMessageId, setOpenedMessageId] = useState(() => { const id = new URLSearchParams(window.location.search).get('message'); return id && /^[1-9][0-9]*$/.test(id) ? id : null; });
 
   const refresh = useCallback(async () => {
@@ -237,40 +284,51 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   };
   const isSettings = activeFolder === 'Settings';
   const isReady = apiStatus.status === 'ready';
+  const selectFolder = (label) => {
+    setActiveFolder(label);
+    setComposer(null);
+    setSendNotice('');
+    setSearchInput('');
+    setSearchQuery('');
+    closeMessage();
+  };
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="identity"><div className="brand-icon">✉</div><div><div className="brand-name">Cross Domain</div><div className="brand-subtitle">Email client</div></div></div>
-        <div className="section-label">WORKSPACE</div>
-        <nav aria-label="Mail folders">
-          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} onClick={() => { setActiveFolder(item.label); setComposer(null); setSendNotice(''); closeMessage(); }}><span aria-hidden="true">{item.icon}</span><span>{item.label}</span></button>)}
+        <div className="identity"><div className="brand-icon"><MailIcon name="inbox" size={25} /></div><div><div className="brand-name">Cross Domain</div><div className="brand-subtitle">Mail</div></div></div>
+        <button type="button" className="sidebar-compose" onClick={() => startCompose()} disabled={!mailboxes.length}><MailIcon name="compose" size={21} /><span>Compose</span></button>
+        <nav aria-label="Mail folders" className="folder-nav">
+          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} aria-current={activeFolder === item.label ? 'page' : undefined} onClick={() => selectFolder(item.label)}><MailIcon name={item.icon} size={19}/><span>{item.title}</span></button>)}
         </nav>
-        <button type="button" className="sidebar-compose" onClick={() => startCompose()} disabled={!mailboxes.length}>＋ Compose</button>
         <div className="section-label mailbox-label">MAILBOXES</div>
         <nav aria-label="Mailboxes" className="mailbox-nav">
           <button type="button" className={`mailbox-link ${selectedMailbox === '' ? 'selected' : ''}`} onClick={() => { setSelectedMailbox(''); if (isSettings) setActiveFolder('Unified inbox'); closeMessage(); }}>All mailboxes</button>
           {mailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${String(selectedMailbox) === String(mailbox.id) ? 'selected' : ''}`} title={mailbox.address} onClick={() => { setSelectedMailbox(String(mailbox.id)); if (isSettings) setActiveFolder('Unified inbox'); closeMessage(); }}>{mailbox.address}</button>)}
           {!loadingSetup && !mailboxes.length && <span className="sidebar-hint">Add mailboxes in Settings</span>}
         </nav>
-        <div className="sidebar-bottom"><div className="server-dot" /><span>Signed in as {user.name}</span></div>
+        <div className="sidebar-bottom"><span className="account-avatar">{(user.name || 'A').charAt(0).toUpperCase()}</span><span className="account-name" title={user.name}>Signed in as <strong>{user.name}</strong></span></div>
       </aside>
       <div className="main">
-        <header className="topbar"><div className="breadcrumb">Email <span>/</span> {activeFolder}{composer ? ' / Compose' : openedMessageId && !isSettings ? ' / Read message' : ''}</div><div className="topbar-actions"><div className={`api-pill ${isReady ? 'ready' : ''}`} role="status"><span className="server-dot" />{isReady ? 'API connected' : 'API unavailable'}</div><button className="signout-button" type="button" onClick={onLogout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button></div></header>
+        <header className="topbar">
+          {!isSettings ? (
+            <form className="mail-search" role="search" onSubmit={(event) => { event.preventDefault(); setSearchQuery(searchInput.trim()); closeMessage(); }}>
+              <MailIcon name="search" size={21} />
+              <input aria-label="Search messages in the current folder" type="search" maxLength={120} value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search mail in this folder" />
+              {searchInput && <button type="button" className="mail-icon-button" title="Clear search" aria-label="Clear search" onClick={() => { setSearchInput(''); setSearchQuery(''); }}><MailIcon name="close" size={18}/></button>}
+              <button type="submit" className="search-submit">Search</button>
+            </form>
+          ) : <span className="topbar-context">Mailbox settings</span>}
+          <div className="topbar-actions"><div className={`api-pill ${isReady ? 'ready' : ''}`} role="status"><span className="server-dot" />{isReady ? 'Connected' : 'Unavailable'}</div><button className="signout-button" type="button" onClick={onLogout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button></div>
+        </header>
         <main className="content">
-          <p className="eyebrow">SECURE WORKSPACE</p>
-          <h1>{composer ? 'Compose email' : openedMessageId && !isSettings ? 'Read message' : activeFolder}</h1>
-          <p className="intro">{isSettings ? 'Manage your domains and mailboxes.' : composer ? 'Write, save, and send from a configured domain.' : openedMessageId ? 'Read your email securely.' : 'Read imported email from your configured mailboxes in one private workspace.'}</p>
+          <div className="workspace-heading"><div><h1>{folderInfo.title}</h1><p className="intro">{isSettings ? 'Manage the domains and addresses connected to your inbox.' : selectedMailbox ? `Viewing messages for ${mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address || 'selected mailbox'}` : 'Your mail, organized in one place.'}</p></div></div>
           {setupError && <div className="form-alert error" role="alert">{setupError}</div>}
           {sendNotice && <div className="form-alert success" role="status">{sendNotice}</div>}
-          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : composer ? <ComposeMail key={composer.draftId || 'new'} csrf={csrf} mailboxes={mailboxes} selectedMailbox={selectedMailbox} draftId={composer.draftId || null} initial={composer.initial} onClose={() => setComposer(null)} onExpired={onExpired} onSent={(receipt) => { setComposer(null); setActiveFolder('Sent'); setSendNotice(receipt.message); }} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} />}
-          {!openedMessageId && !composer && <div className="status-grid">
-            <div className="status-card"><div>Laravel API</div><strong>{apiStatus.status}</strong><span>Backend service health</span></div>
-            <div className="status-card"><div>PostgreSQL</div><strong>{apiStatus.database}</strong><span>Private persistent database</span></div>
-            <div className="status-card"><div>Configured mailboxes</div><strong>{mailboxes.length}</strong><span>Configured addresses</span></div>
-          </div>}
-          {!openedMessageId && !composer && <p className="notice">Receiving uses Cloudflare R2. Outbound sending uses explicitly configured SMTP credentials and verified sending domains.</p>}
+          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} query={searchQuery} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} />}
+          {isSettings && <details className="workspace-system"><summary>System health</summary><div className="status-grid"><div className="status-card"><div>Laravel API</div><strong>{apiStatus.status}</strong><span>Backend service</span></div><div className="status-card"><div>PostgreSQL</div><strong>{apiStatus.database}</strong><span>Private database</span></div><div className="status-card"><div>Mailboxes</div><strong>{mailboxes.length}</strong><span>Configured addresses</span></div></div><p className="notice">Incoming mail uses Cloudflare R2. Outgoing mail uses your configured SMTP provider.</p></details>}
         </main>
       </div>
+      {composer && <ComposeMail key={composer.draftId || 'new'} csrf={csrf} mailboxes={mailboxes} selectedMailbox={selectedMailbox} draftId={composer.draftId || null} initial={composer.initial} onClose={() => setComposer(null)} onExpired={onExpired} onSent={(receipt) => { setComposer(null); setActiveFolder('Sent'); setSendNotice(receipt.message); }} />}
     </div>
   );
 }
