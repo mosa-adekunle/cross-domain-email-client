@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\ArchivedMimeAttachments;
+use App\Support\OutboundMessageData;
 use Aws\S3\S3Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -86,7 +87,10 @@ class MessageDetailController
                 'mailbox_id' => $message->mailbox_id ?? null,
                 'direction' => $message->direction,
                 'delivery_status' => $message->delivery_status,
-                'internet_message_id' => $message->internet_message_id,
+                // Normalized IDs preserve reply threading even when the MIME parser
+                // originally stored an unbracketed Message-ID. For malformed
+                // legacy IDs, omit the header rather than blocking a reply.
+                'internet_message_id' => OutboundMessageData::singleMessageId((string) ($message->internet_message_id ?? '')),
                 'in_reply_to' => $message->in_reply_to,
                 'mailbox_address' => $message->mailbox_address,
                 'folder' => $message->folder,
