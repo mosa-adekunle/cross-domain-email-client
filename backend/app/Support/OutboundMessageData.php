@@ -66,9 +66,15 @@ final class OutboundMessageData
 
     public static function singleMessageId(string $value): ?string
     {
+        // MIME parsers may return a bare Message-ID (without angle brackets).
+        // Canonicalize valid IDs while refusing raw control bytes, including
+        // trailing CRLF, so untrusted headers cannot inject another field.
+        if (preg_match('/[\x00-\x1f\x7f]/', $value)) return null;
         $id = trim($value);
-        if ($id === '' || strlen($id) > 998 || preg_match('/[\r\n\x00-\x1f]/', $id)) return null;
-        return preg_match('/^<[^<>\s@]+@[^<>\s@]+>$/D', $id) ? $id : null;
+        if ($id === '' || strlen($id) > 998) return null;
+        if (preg_match('/^<[^<>\s@]+@[^<>\s@]+>$/D', $id)) return $id;
+        if (strlen($id) <= 996 && preg_match('/^[^<>\s@]+@[^<>\s@]+$/D', $id)) return '<'.$id.'>';
+        return null;
     }
 
     public static function configured(): bool
