@@ -3,12 +3,14 @@ import React, { useEffect, useRef, useState } from 'react';
 // Load the PDF parser only when someone actually opens a PDF preview.
 const PdfAttachmentPreview = React.lazy(() => import('./PdfAttachmentPreview.jsx'));
 
-export default function MessageReader({ messageId, csrf, onBack, onExpired, onReply, onRead }) {
+export default function MessageReader({ messageId, csrf, onBack, onExpired, onReply, onRead, onAction }) {
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const [attachmentBusy, setAttachmentBusy] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
   const [preview, setPreview] = useState(null);
   const previewUrl = useRef(null);
@@ -151,6 +153,20 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
     return () => { active = false; };
   }, [messageId, csrf, onExpired, onRead]);
 
+  async function moveMessage(action) {
+    if (!message || actionBusy) return;
+    setActionBusy(true);
+    setActionError('');
+    try {
+      await onAction(action, message.id);
+    } catch (err) {
+      if (err.status === 401) onExpired();
+      setActionError(err.message || 'Unable to update this message.');
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   const timestamp = message && (message.received_at || message.sent_at || message.created_at);
   const date = timestamp && !Number.isNaN(Date.parse(timestamp))
     ? new Date(timestamp).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' })
@@ -159,13 +175,15 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
   return (
     <section className="panel message-detail" aria-label="Read email">
       <div className="message-toolbar">
-        <button type="button" className="message-back" onClick={onBack}>← Back to messages</button>
+        <button type="button" className="message-back" onClick={onBack} title="Back to messages">← <span>Back</span></button>
         <div className="message-toolbar-actions">
+          {message && message.folder === 'inbox' && <button type="button" className="message-back" disabled={actionBusy} title="Archive" onClick={() => moveMessage('archive')}>Archive</button>}
+          {message && <button type="button" className="message-back" disabled={actionBusy} title={message.folder === 'trash' ? 'Restore from Trash' : 'Move to Trash'} onClick={() => moveMessage(message.folder === 'trash' ? 'restore' : 'trash')}>{message.folder === 'trash' ? 'Restore' : 'Delete'}</button>}
           {message && <button type="button" className="message-back" onClick={() => onReply(message)}>↩ Reply</button>}
-          {message && <button type="button" className="message-back" onClick={() => onReply(message, true)}>↪ Forward text</button>}
-          <span className="setup-status">Private email</span>
+          {message && <button type="button" className="message-back" onClick={() => onReply(message, true)}>↪ Forward</button>}
         </div>
       </div>
+      {actionError && <div className="form-alert error" role="alert">{actionError}</div>}
       {loading ? <div className="empty"><p>Loading email…</p></div> : error ? (
         <div className="message-load-error"><div className="form-alert error" role="alert">{error}</div><button type="button" className="message-back" onClick={onBack}>Back to messages</button></div>
       ) : message ? (
@@ -180,7 +198,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
             <div><dt>Mailbox</dt><dd>{message.mailbox_address}</dd></div>
           </dl>
           <div className="message-body">
-            <div className="message-body-heading">Message</div>
+
             <div className="message-text">{message.body || ((message.attachments || []).length ? 'This message has attachments but no readable text body.' : 'This email has no readable text body.')}</div>
             {message.body_truncated && <p className="message-truncated">Long message shortened for display; the original archived email is intact.</p>}
           </div>
@@ -209,7 +227,8 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
               {attachmentError && <p className="attachment-error" role="alert">{attachmentError}</p>}
             </section>
           )}
-          <div className="message-view-notice">Files are retrieved privately from the original archived message. Preview is restricted to validated images, PDFs and safe text; other file types are download-only. Only open files you trust.</div>
+          {(message.attachments || []).length > 0 && <div className="message-view-notice">Files are retrieved privately from the original email archive. Only open files you trust.</div>}
+          <div className="message-bottom-actions"><button type="button" onClick={() => onReply(message)}>↩ Reply</button><button type="button" onClick={() => onReply(message, true)}>↪ Forward</button></div>
           {preview && (
             <div className="attachment-modal-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closePreview(); }}>
               <div className="attachment-modal" role="dialog" aria-modal="true" aria-label={'Preview ' + preview.filename}>
