@@ -614,3 +614,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .mail-list-tools { gap: 2px; }
   .mail-list-heading h2 { font-size: 17px; }
 }
+
+/* Keep the login screen in the same clean visual language. */
+.auth-layout { background: #f6f8fc; }
+.auth-card { border: 1px solid #e4e9f1; border-radius: 25px; box-shadow: 0 10px 28px #25385812; }
+.auth-card .auth-brand { padding: 0 0 26px; }
+.auth-card h1 { color: #202124; font-weight: 600; }
+.auth-card .primary-button { border-radius: 20px; }
+@media (max-width: 760px) {
+  /* Override the legacy stacked compose header rules on phones. */
+  .compose-header { flex-direction: row; align-items: center; padding: 8px 13px 8px 17px; }
+}
