@@ -159,23 +159,55 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, onExpired, o
   useEffect(() => { setPage(1); }, [folder, selectedMailbox, query]);
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError('');
+    let inFlight = false;
     const params = new URLSearchParams({ folder, page: String(page) });
     if (selectedMailbox) params.set('mailbox_id', String(selectedMailbox));
     if (query.trim()) params.set('q', query.trim());
-    api(`/messages?${params.toString()}`).then((data) => {
-      if (!active) return;
-      setMessages(data.messages || []);
-      setPagination(data.pagination || { current_page: 1, last_page: 1, total: 0 });
-      setLoading(false);
-    }).catch((err) => {
-      if (!active) return;
-      if (err.status === 401) onExpired();
-      setError('Unable to load messages. Please try again.');
-      setLoading(false);
-    });
-    return () => { active = false; };
+
+    const loadMessages = async (background = false) => {
+      // One request at a time. Never poll a hidden tab; refresh immediately
+      // when it becomes visible again.
+      if (!active || inFlight || (background && document.visibilityState === 'hidden')) return;
+      inFlight = true;
+      if (!background) {
+        setLoading(true);
+        setError('');
+      }
+      try {
+        const data = await api(`/messages?${params.toString()}`);
+        if (!active) return;
+        setMessages(data.messages || []);
+        setPagination(data.pagination || { current_page: 1, last_page: 1, total: 0 });
+        setError('');
+      } catch (err) {
+        if (!active) return;
+        if (err.status === 401) onExpired();
+        // Keep existing emails visible if a background request fails.
+        if (!background) setError('Unable to load messages. Please try again.');
+      } finally {
+        inFlight = false;
+        if (active && !background) setLoading(false);
+      }
+    };
+
+    // Initial load and manual refresh use the regular loading state.
+    loadMessages();
+
+    // Only the Inbox polls; other folders still load on navigation and via
+    // their manual Refresh button. Compose can remain open above the inbox.
+    let timer;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadMessages(true);
+    };
+    if (folder === 'inbox') {
+      timer = window.setInterval(() => loadMessages(true), 60_000);
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+    return () => {
+      active = false;
+      if (timer) window.clearInterval(timer);
+      if (folder === 'inbox') document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [folder, selectedMailbox, query, page, refreshKey, onExpired]);
 
   return (
@@ -186,6 +218,7 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, onExpired, o
           <p>{selectedAddress || 'All mailboxes'}{query ? ` · Searching for “${query}”` : ''}</p>
         </div>
         <div className="mail-list-tools">
+          {folder === 'inbox' && <span className="mail-count" title="The inbox refreshes every 60 seconds while this tab is active">Auto-refresh · 60s</span>}
           <span className="mail-count" aria-live="polite">{loading ? 'Loading…' : `${pagination.total} message${pagination.total === 1 ? '' : 's'}`}</span>
           <button type="button" className="mail-icon-button" title="Refresh messages" aria-label="Refresh messages" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><MailIcon name="refresh" size={19} /></button>
         </div>
