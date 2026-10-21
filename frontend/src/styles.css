@@ -702,3 +702,36 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (hover: none) {
   .mail-contact:hover .contact-card { display: none; }
 }
+
+
+/* Provided Made North Technologies SVG wordmark. Keep the original artwork
+   intact, including the icon, rather than duplicating it beside the image. */
+.identity.identity-with-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  min-height: 0;
+  padding: 0 8px 15px 19px;
+}
+.identity .brand-logo {
+  display: block;
+  width: 210px;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  flex: none;
+}
+.identity .brand-logo-subtitle {
+  display: block;
+  margin: -10px 0 0 7px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+@media (max-width: 760px) {
+  .identity.identity-with-logo { padding: 0 8px 6px; }
+  .identity .brand-logo { width: 196px; max-width: 100%; }
+  .identity .brand-logo-subtitle { margin-top: -9px; }
+}
