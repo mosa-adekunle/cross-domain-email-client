@@ -34,6 +34,7 @@ jobs:
         run: |
           php backend/artisan route:list --path=api/drafts
           php backend/artisan route:list --path=api/outbound
+          php backend/artisan route:list --path=api/messages/actions
       - name: Frontend production build
         run: |
           npm install --prefix frontend --no-audit --no-fund
