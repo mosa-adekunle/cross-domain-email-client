@@ -28,7 +28,7 @@ class MessageListController
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
-            'folder' => ['sometimes', Rule::in(['inbox', 'sent', 'drafts', 'archive'])],
+            'folder' => ['sometimes', Rule::in(['inbox', 'sent', 'drafts', 'archive', 'trash'])],
             'mailbox_id' => ['nullable', 'integer', Rule::exists('mailboxes', 'id')],
             'page' => ['sometimes', 'integer', 'min:1', 'max:10000'],
             'q' => ['sometimes', 'nullable', 'string', 'max:120'],
