@@ -9,6 +9,22 @@ use Illuminate\Validation\Rule;
 
 class MessageListController
 {
+    public function unreadCount(Request $request): JsonResponse
+    {
+        $filters = $request->validate([
+            'mailbox_id' => ['sometimes', 'integer', Rule::exists('mailboxes', 'id')],
+        ]);
+        $query = DB::table('mail_messages')
+            ->where('folder', 'inbox')
+            ->where('is_read', false)
+            ->whereNull('deleted_at');
+        if (isset($filters['mailbox_id'])) {
+            $query->where('mailbox_id', $filters['mailbox_id']);
+        }
+        return response()->json(['unread_count' => $query->count()])
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
@@ -54,6 +70,40 @@ class MessageListController
         }
 
         $messages = $query->paginate(25);
+
+        // A Sent/Drafts row shows its recipient, not the sender. Use the
+        // newest known incoming display name for matching recipient addresses
+        // without an external contact lookup or per-message database queries.
+        $addresses = [];
+        foreach ($messages->items() as $message) {
+            if (! in_array($folder, ['sent', 'drafts'], true)) continue;
+            foreach (explode(',', (string) ($message->to_recipients ?? '')) as $address) {
+                $email = strtolower(trim($address));
+                if (filter_var($email, FILTER_VALIDATE_EMAIL)) $addresses[$email] = true;
+            }
+        }
+        $knownNames = [];
+        if ($addresses) {
+            $known = DB::table('mail_messages')
+                ->selectRaw('DISTINCT ON (LOWER(from_address)) LOWER(from_address) AS email, from_name')
+                ->whereIn(DB::raw('LOWER(from_address)'), array_keys($addresses))
+                ->whereNotNull('from_name')
+                ->where('from_name', '<>', '')
+                ->whereNull('deleted_at')
+                ->orderByRaw('LOWER(from_address), id DESC')
+                ->get();
+            foreach ($known as $contact) {
+                $knownNames[$contact->email] = $contact->from_name;
+            }
+        }
+        foreach ($messages->items() as $message) {
+            $recipients = array_values(array_filter(array_map('trim', explode(',', (string) ($message->to_recipients ?? '')))));
+            $first = $recipients[0] ?? '';
+            $message->to_contact_email = $first;
+            $message->to_contact_name = $knownNames[strtolower($first)] ?? null;
+            $message->to_recipient_count = count($recipients);
+        }
+
         return response()->json([
             'messages' => $messages->items(),
             'pagination' => [
