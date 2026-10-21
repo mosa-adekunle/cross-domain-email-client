@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\ArchivedMimeAttachments;
 use App\Support\OutboundMessageData;
+use App\Support\SenderIdentity;
 use Aws\S3\S3Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +55,10 @@ class MessageDetailController
                 if (trim($body) === '') {
                     $body = $this->htmlToText((string) ($parsed->getHtmlContent() ?? ''));
                 }
-                $from = (string) ($parsed->getHeaderValue('From') ?: $from);
+                $sender = SenderIdentity::fromMessage($parsed, (string) ($message->from_address ?? ''));
+                $from = $sender['name'] && $sender['email']
+                    ? $sender['name'].' <'.$sender['email'].'>'
+                    : ($sender['email'] ?: $from);
                 $to = (string) ($parsed->getHeaderValue('To') ?: $to);
                 $cc = (string) ($parsed->getHeaderValue('Cc') ?: $cc);
             } catch (Throwable $error) {
