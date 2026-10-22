@@ -12,7 +12,7 @@ BASE="$PWD/runtime/ip-https"
 ACME="$BASE/acme"
 TLS="$BASE/tls"
 EMAIL_FILE="$BASE/contact-email"
-LOCK="$BASE/renew.lock"
+LOCK="$PWD/runtime/https-renew.lock"
 IMAGE='goacme/lego:v5.0.1'
 
 umask 077
