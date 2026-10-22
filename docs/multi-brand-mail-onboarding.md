@@ -12,6 +12,60 @@ The app is already capable of storing multiple mail domains, mailboxes and viewi
 
 Resend receiving stays disabled for all three. A verified sending domain alone does **not** create or host receiving mailboxes.
 
+## Approved eleven-address rollout (2026-10-22)
+
+The administrator explicitly approved these addresses:
+
+| Business | New addresses |
+| --- | --- |
+| ReceiptBoss | sales@receiptboss.ca, legal@receiptboss.ca, privacy@receiptboss.ca, hello@receiptboss.ca |
+| Santa's Bag | sales@santasbag.ca, legal@santasbag.ca, privacy@santasbag.ca, hello@santasbag.ca |
+| Made North Technologies | mosa@madenorth.dev, hello@madenorth.dev, sales@madenorth.dev |
+
+The existing `inbox-test@receiptboss.ca` Worker recipient remains allowed, but is **not** provisioned anew. The app's approved mailbox manifest is `backend/config/brand_mailboxes.php`; the Cloudflare Worker allowlist is `workers/email-archive/wrangler.jsonc`.
+
+### Stage database records — safe to run before DNS changes
+
+The Laravel command is repeatable and preserves every existing mailbox and domain record, including forwarding state:
+
+```bash
+set -e
+cd ~/cross-domain-email-client
+git pull --ff-only origin main
+git rev-parse --short HEAD
+sudo docker compose config --quiet
+sudo docker compose build api
+sudo docker compose run --rm --no-deps api php tests/brand-mailboxes-smoke.php
+sudo docker compose run --rm --no-deps api php tests/outbound-smoke.php
+sudo docker compose up -d --no-deps --force-recreate api
+sudo docker compose exec -T api php artisan mail:provision-brand-mailboxes
+sudo docker compose exec -T api php artisan mail:provision-brand-mailboxes --apply
+bash scripts/verify-domain-https.sh
+sudo docker compose ps
+```
+
+The first invocation previews planned changes. `--apply` creates only missing records. Newly created domains are **pending/inactive**; newly created addresses are **inactive and marked onboarding_pending**. Existing rows are never made inactive or modified. A pending identity is excluded from the outgoing sender list and its send attempts are rejected. This command **does not** configure forwarding, DNS, routing, or verify inbound delivery.
+
+### Cloudflare Worker recipient allowlist
+
+The source `wrangler.jsonc` now allows precisely these 11 addresses plus `inbox-test@receiptboss.ca`. Updating GitHub or deploying the Laravel API **does not deploy the Cloudflare Worker**. From a workstation authenticated to the correct Cloudflare account, verify the Worker config and R2 binding and run:
+
+```bash
+cd workers/email-archive
+npm ci
+npm test
+npx wrangler deploy --dry-run
+npx wrangler deploy
+```
+
+These commands publish the Worker code and allowlist; they do **not** create Email Routing rules. Preserve and test the existing ReceiptBoss `support`, `legal`, and `privacy` forwarding arrangements before changing the respective Cloudflare actions. Adding a Worker action can replace existing forwarding behavior if you edit an active rule.
+
+### Live routing must be verified address-by-address
+
+For each domain, confirm that Cloudflare Email Routing already owns the relevant incoming MX records. If not, migrate deliberately and only after identifying the current provider and any dependent mailboxes. For each approved address create or update the explicit per-recipient route to `cdec-inbound-archive`, *only when preserving any required existing forwarding*. Never use a catch-all. Test each address from an unrelated provider, confirm raw MIME in R2 and a successful import, and check arrival in the unified mailbox UI. Do not enable outgoing for `madenorth.dev` until Resend reports verified. After testing delivery, clear the pending flag for each new identity through a separately reviewed activation procedure.
+
+This rollout does not grant access to old external Gmail message history; transferring that historical mail would require an explicit import.
+
 ## Existing known addresses, not an exhaustive list
 
 - receiptboss.ca: inbox-test@receiptboss.ca and support@receiptboss.ca have appeared in the deployed mail client. Independently confirm privacy@receiptboss.ca and legal@receiptboss.ca and preserve existing Gmail forwarding rules.
