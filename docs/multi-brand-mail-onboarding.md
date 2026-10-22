@@ -12,6 +12,12 @@ The app is already capable of storing multiple mail domains, mailboxes and viewi
 
 Resend receiving stays disabled for all three. A verified sending domain alone does **not** create or host receiving mailboxes.
 
+## Made North-only inbound activation
+
+To receive every future `@madenorth.dev` message in the existing private Cloudflare R2 bucket **without changing the four other domains**, use the isolated `--domain madenorth.dev` workflow. It previews the zone, requires Cloudflare Email Routing to be ready, preserves active address-specific rules, and updates only the Made North catch-all. Provision only its `catchall@` database inbox with `php artisan mail:provision-catchalls --domain=madenorth.dev --apply`.
+
+Complete instructions: [Made North inbound Email Routing → R2](madenorth-inbound-r2.md). Running the legacy five-domain script *without* `--domain` still inspects and activates all five zones; do not use that broader command for a Made North-only request.
+
 ## Domain-wide inbound routing (updated requirement, 2026-10-22)
 
 **Goal: All future incoming email addressed to any local part at any of the owner's five root domains must reach Cross Domain Email Client—not just eleven named addresses.**
