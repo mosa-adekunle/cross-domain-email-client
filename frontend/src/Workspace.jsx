@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import MessageReader from './MessageReader.jsx';
 import ComposeMail from './ComposeMail.jsx';
-import { readMailLocation, mailLocationUrl } from './mailLocation.js';
+import { readMailLocation, mailLocationUrl, mailPageUrl } from './mailLocation.js';
 
 const folders = [
   { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
@@ -24,6 +24,8 @@ const iconPaths = {
   settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm-1-13h2l.6 2.2 1.8.8 2-.9 1.5 1.5-.9 2  .8 1.8 2.2.6v2l-2.2.6-.8 1.8.9 2-1.5 1.5-2-.9-1.8.8-.6 2.2h-2l-.6-2.2-1.8-.8-2 .9-1.5-1.5.9-2-.8-1.8-2.2-.6v-2l2.2-.6.8-1.8-.9-2L6.5 3.6l2 .9 1.8-.8L11 2.5',
   search: 'm21 21-4.5-4.5M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z',
   refresh: 'M20 6v5h-5M4 18v-5h5M5.8 9A7 7 0 0 1 18 6l2 5M4 13l2 5a7 7 0 0 0 12-3',
+  'chevron-left': 'm15 18-6-6 6-6',
+  'chevron-right': 'm9 18 6-6-6-6',
   compose: 'M12 20H4V4h10M9 15l10-10 2 2-10 10-4 1 1-4Z',
   close: 'M18 6 6 18M6 6l12 12',
 };
@@ -172,10 +174,9 @@ function DomainSettings({ domains, mailboxes, refresh, csrf, onExpired }) {
   );
 }
 
-function MessagesPanel({ folder, mailboxes, selectedMailbox, query, csrf, onExpired, onOpenMessage, onOpenDraft, onMutation }) {
+function MessagesPanel({ folder, mailboxes, selectedMailbox, query, page, onPageChange, csrf, onExpired, onOpenMessage, onOpenDraft, onMutation }) {
   const [messages, setMessages] = useState([]);
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
-  const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -186,8 +187,12 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, csrf, onExpi
   const folderTitle = folders.find((item) => item.folder === folder)?.title || 'Messages';
   const visibleIds = messages.map((m) => Number(m.id));
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const totalMessages = Number(pagination.total) || 0;
+  const pageSize = Number(pagination.per_page) || 50;
+  const rangeStart = totalMessages ? ((page - 1) * pageSize + 1) : 0;
+  const rangeEnd = totalMessages ? Math.min(page * pageSize, totalMessages) : 0;
 
-  useEffect(() => { setPage(1); setSelectedIds([]); setNotice(''); }, [folder, selectedMailbox, query]);
+  useEffect(() => { setSelectedIds([]); setNotice(''); }, [folder, selectedMailbox, query]);
   useEffect(() => { setSelectedIds([]); }, [page]);
   useEffect(() => {
     let active = true;
@@ -202,8 +207,15 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, csrf, onExpi
       try {
         const data = await api('/messages?' + params.toString());
         if (!active) return;
+        const nextPagination = data.pagination || { current_page: 1, last_page: 1, total: 0, per_page: 50 };
+        // A bulk delete/restore can make the current page disappear.
+        // Return to the last available page rather than showing a blank list.
+        if (page > Math.max(1, nextPagination.last_page || 1)) {
+          onPageChange(Math.max(1, nextPagination.last_page || 1));
+          return;
+        }
         setMessages(data.messages || []);
-        setPagination(data.pagination || { current_page: 1, last_page: 1, total: 0 });
+        setPagination(nextPagination);
         const ids = new Set((data.messages || []).map((m) => Number(m.id)));
         setSelectedIds((previous) => previous.filter((id) => ids.has(id)));
         setError('');
@@ -264,8 +276,12 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, csrf, onExpi
           <p>{selectedAddress || 'All mailboxes'}{query ? ' · Results for “' + query + '”' : ''}</p>
         </div>
         <div className="mail-list-tools">
-          <span className="mail-count" aria-live="polite">{loading ? 'Loading…' : pagination.total + ' message' + (pagination.total === 1 ? '' : 's')}</span>
           <button type="button" className="mail-icon-button" title="Refresh messages" aria-label="Refresh messages" disabled={loading || busy} onClick={() => setRefreshKey((value) => value + 1)}><MailIcon name="refresh" size={18} /></button>
+          <nav className="mail-pager" aria-label="Message pages">
+            <span className="mail-pager-range" aria-live="polite">{loading ? 'Loading…' : `${rangeStart.toLocaleString()}–${rangeEnd.toLocaleString()} of ${totalMessages.toLocaleString()}`}</span>
+            <button type="button" className="mail-icon-button mail-pager-arrow" title="Newer messages" aria-label="Previous page of messages" disabled={loading || busy || page <= 1} onClick={() => onPageChange(page - 1)}><MailIcon name="chevron-left" size={19} /></button>
+            <button type="button" className="mail-icon-button mail-pager-arrow" title="Older messages" aria-label="Next page of messages" disabled={loading || busy || page >= pagination.last_page} onClick={() => onPageChange(page + 1)}><MailIcon name="chevron-right" size={19} /></button>
+          </nav>
         </div>
       </div>
       <div className="mail-actionbar">
@@ -315,7 +331,7 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, csrf, onExpi
               );
             })}
           </div>
-          {pagination.last_page > 1 && <div className="pagination"><span>{'Page ' + page + ' of ' + pagination.last_page}</span><button type="button" disabled={page <= 1 || busy} onClick={() => setPage((value) => value - 1)}>Previous</button><button type="button" disabled={page >= pagination.last_page || busy} onClick={() => setPage((value) => value + 1)}>Next</button></div>}
+
         </>
       )}
     </section>
@@ -337,6 +353,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   const [selectedMailbox, setSelectedMailbox] = useState(() => readMailLocation(window.location.search).mailboxId);
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(() => readMailLocation(window.location.search).page);
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadRefreshKey, setUnreadRefreshKey] = useState(0);
   const onMessageRead = useCallback(() => setUnreadRefreshKey((value) => value + 1), []);
@@ -395,10 +412,11 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   useEffect(() => {
     // Browser Back / Forward restores the whole mail view, not only a message.
     const sync = () => {
-      const { folder, mailboxId, messageId } = readMailLocation(window.location.search);
+      const { folder, mailboxId, messageId, page: restoredPage } = readMailLocation(window.location.search);
       setActiveFolder(folders.find((item) => item.folder === folder)?.label || 'Unified inbox');
       setSelectedMailbox(mailboxId);
       setOpenedMessageId(messageId);
+      setPage(restoredPage);
       setSearchInput('');
       setSearchQuery('');
       setComposer(null);
@@ -421,6 +439,13 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     setOpenedMessageId(null);
   };
 
+  const navigateToPage = (nextPage) => {
+    const target = mailPageUrl(window.location.href, nextPage);
+    const current = window.location.pathname + window.location.search + window.location.hash;
+    if (target !== current) window.history.pushState(null, '', target);
+    setPage(nextPage);
+  };
+
   const navigateToView = (label, mailboxId) => {
     const folder = folders.find((item) => item.label === label)?.folder || 'inbox';
     const target = mailLocationUrl(window.location.href, { folder, mailboxId });
@@ -429,6 +454,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     setActiveFolder(label);
     setSelectedMailbox(String(mailboxId || ''));
     setOpenedMessageId(null);
+    setPage(1);
   };
 
   const folderInfo = folders.find((item) => item.label === activeFolder);
@@ -471,10 +497,10 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
       <div className="main">
         <header className="topbar">
           {!isSettings ? (
-            <form className="mail-search" role="search" onSubmit={(event) => { event.preventDefault(); setSearchQuery(searchInput.trim()); closeMessage(); }}>
+            <form className="mail-search" role="search" onSubmit={(event) => { event.preventDefault(); navigateToPage(1); setSearchQuery(searchInput.trim()); closeMessage(); }}>
               <MailIcon name="search" size={21} />
               <input aria-label="Search messages in the current folder" type="search" maxLength={120} value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search mail in this folder" />
-              {searchInput && <button type="button" className="mail-icon-button" title="Clear search" aria-label="Clear search" onClick={() => { setSearchInput(''); setSearchQuery(''); }}><MailIcon name="close" size={18}/></button>}
+              {searchInput && <button type="button" className="mail-icon-button" title="Clear search" aria-label="Clear search" onClick={() => { navigateToPage(1); setSearchInput(''); setSearchQuery(''); }}><MailIcon name="close" size={18}/></button>}
               <button type="submit" className="search-submit">Search</button>
             </form>
           ) : <span className="topbar-context">Mailbox settings</span>}
@@ -484,7 +510,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
           <div className="workspace-heading"><div><h1>{folderInfo.title}</h1><p className="intro">{isSettings ? 'Manage the domains and addresses connected to your inbox.' : selectedMailbox ? `Viewing messages for ${mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address || 'selected mailbox'}` : 'Your mail, organized in one place.'}</p></div></div>
           {setupError && <div className="form-alert error" role="alert">{setupError}</div>}
           {sendNotice && <div className="form-alert success" role="status">{sendNotice}</div>}
-          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} onRead={onMessageRead} onAction={async (action, id) => { const result = await api("/messages/actions", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": csrf }, body: JSON.stringify({ action, ids: [Number(id)] }) }); onMessageMutation(); closeMessage(); return result; }} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} query={searchQuery} csrf={csrf} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} onMutation={onMessageMutation} />}
+          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} onRead={onMessageRead} onAction={async (action, id) => { const result = await api("/messages/actions", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": csrf }, body: JSON.stringify({ action, ids: [Number(id)] }) }); onMessageMutation(); closeMessage(); return result; }} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} query={searchQuery} page={page} onPageChange={navigateToPage} csrf={csrf} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} onMutation={onMessageMutation} />}
           {isSettings && <details className="workspace-system"><summary>System health</summary><div className="status-grid"><div className="status-card"><div>Laravel API</div><strong>{apiStatus.status}</strong><span>Backend service</span></div><div className="status-card"><div>PostgreSQL</div><strong>{apiStatus.database}</strong><span>Private database</span></div><div className="status-card"><div>Mailboxes</div><strong>{mailboxes.length}</strong><span>Configured addresses</span></div></div><p className="notice">Incoming mail uses Cloudflare R2. Outgoing mail uses your configured SMTP provider.</p></details>}
         </main>
       </div>
