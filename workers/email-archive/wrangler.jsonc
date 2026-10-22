@@ -11,6 +11,7 @@
   ],
   "vars": {
     "ALLOWED_RECIPIENTS": "inbox-test@receiptboss.ca,sales@receiptboss.ca,legal@receiptboss.ca,privacy@receiptboss.ca,hello@receiptboss.ca,sales@santasbag.ca,legal@santasbag.ca,privacy@santasbag.ca,hello@santasbag.ca,mosa@madenorth.dev,hello@madenorth.dev,sales@madenorth.dev",
-    "LEGACY_FORWARD_RECIPIENTS": "legal@receiptboss.ca,privacy@receiptboss.ca"
+    "LEGACY_FORWARD_RECIPIENTS": "legal@receiptboss.ca,privacy@receiptboss.ca",
+    "ALLOWED_DOMAINS": "receiptboss.ca,santasbag.ca,madenorth.dev,madekunle.com,delishearsentertainment.com"
   }
 }
