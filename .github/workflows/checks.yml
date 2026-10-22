@@ -30,6 +30,8 @@ jobs:
         run: php backend/tests/attachment-smoke.php
       - name: Outbound email validation smoke tests
         run: php backend/tests/outbound-smoke.php
+      - name: Approved brand mailbox inventory smoke tests
+        run: php backend/tests/brand-mailboxes-smoke.php
       - name: Laravel outgoing route registration
         run: |
           php backend/artisan route:list --path=api/drafts
