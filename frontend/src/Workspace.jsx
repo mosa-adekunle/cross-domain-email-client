@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import MessageReader from './MessageReader.jsx';
 import ComposeMail from './ComposeMail.jsx';
 import { readMailLocation, mailLocationUrl, mailPageUrl, messagePageRange } from './mailLocation.js';
+import { messageNavigationHighlight } from './messageHighlight.js';
 
 const folders = [
   { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
@@ -356,6 +357,17 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   const onMessageRead = useCallback(() => setUnreadRefreshKey((value) => value + 1), []);
   const onMessageMutation = useCallback(() => setUnreadRefreshKey((value) => value + 1), []);
   const [openedMessageId, setOpenedMessageId] = useState(() => readMailLocation(window.location.search).messageId);
+  // The opened message can belong to a different mailbox than the list filter.
+  // Keep the selected list filter intact; this state is for visual context only.
+  const [openedMessageContext, setOpenedMessageContext] = useState(null);
+  const onMessageLoaded = useCallback((message) => {
+    setOpenedMessageContext({
+      id: message.id,
+      mailbox_id: message.mailbox_id,
+      mailbox_address: message.mailbox_address,
+      folder: message.folder,
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -413,6 +425,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
       setActiveFolder(folders.find((item) => item.folder === folder)?.label || 'Unified inbox');
       setSelectedMailbox(mailboxId);
       setOpenedMessageId(messageId);
+      setOpenedMessageContext(null);
       setPage(restoredPage);
       setSearchInput('');
       setSearchQuery('');
@@ -427,6 +440,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     url.searchParams.set('message', String(id));
     window.history.pushState(null, '', url.pathname + url.search + url.hash);
     setOpenedMessageId(String(id));
+    setOpenedMessageContext(null);
   };
   const closeMessage = () => {
     if (!openedMessageId) return;
@@ -434,6 +448,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     url.searchParams.delete('message');
     window.history.pushState(null, '', url.pathname + url.search + url.hash);
     setOpenedMessageId(null);
+    setOpenedMessageContext(null);
   };
 
   const navigateToPage = (nextPage) => {
@@ -451,10 +466,19 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     setActiveFolder(label);
     setSelectedMailbox(String(mailboxId || ''));
     setOpenedMessageId(null);
+    setOpenedMessageContext(null);
     setPage(1);
   };
 
   const folderInfo = folders.find((item) => item.label === activeFolder);
+  const messageHighlight = messageNavigationHighlight({
+    openedMessageId,
+    messageContext: openedMessageContext,
+    activeFolder,
+    selectedMailbox,
+    mailboxes,
+    folders,
+  });
   const startCompose = (options = {}) => { closeMessage(); setSendNotice(''); setComposer(options); };
   const openReply = (message, forward = false) => {
     const fromMailbox = mailboxes.find((m) => String(m.address).toLowerCase() === String(message.mailbox_address).toLowerCase());
@@ -481,12 +505,12 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
         <div className="identity identity-with-logo"><img className="brand-logo" src="/made-north-technologies-logo.svg" alt="Made North Technologies" width="2048" height="682" /></div>
         <button type="button" className="sidebar-compose" onClick={() => startCompose()} disabled={!mailboxes.length}><MailIcon name="compose" size={21} /><span>Compose</span></button>
         <nav aria-label="Mail folders" className="folder-nav">
-          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${activeFolder === item.label ? 'selected' : ''}`} aria-current={activeFolder === item.label ? 'page' : undefined} onClick={() => selectFolder(item.label)}><MailIcon name={item.icon} size={19}/><span>{item.title}</span>{item.folder === 'inbox' && unreadCount > 0 && <span className="nav-unread-count" aria-label={`${unreadCount} new messages`}>({unreadCount} new)</span>}</button>)}
+          {folders.map((item) => <button key={item.label} type="button" className={`nav-link ${messageHighlight.folderLabel === item.label ? 'selected' : ''}`} aria-current={messageHighlight.folderLabel === item.label ? 'page' : undefined} onClick={() => selectFolder(item.label)}><MailIcon name={item.icon} size={19}/><span>{item.title}</span>{item.folder === 'inbox' && unreadCount > 0 && <span className="nav-unread-count" aria-label={`${unreadCount} new messages`}>({unreadCount} new)</span>}</button>)}
         </nav>
         <div className="section-label mailbox-label">MAILBOXES</div>
         <nav aria-label="Mailboxes" className="mailbox-nav">
-          <button type="button" className={`mailbox-link ${selectedMailbox === '' ? 'selected' : ''}`} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, '')}>All mailboxes</button>
-          {mailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${String(selectedMailbox) === String(mailbox.id) ? 'selected' : ''}`} title={mailbox.address} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, String(mailbox.id))}>{mailbox.address}</button>)}
+          <button type="button" className={`mailbox-link ${messageHighlight.mailboxId === '' ? 'selected' : ''}`} aria-current={messageHighlight.mailboxId === '' ? 'page' : undefined} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, '')}>All mailboxes</button>
+          {mailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${messageHighlight.mailboxId === String(mailbox.id) ? 'selected' : ''}`} aria-current={messageHighlight.mailboxId === String(mailbox.id) ? 'page' : undefined} title={mailbox.address} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, String(mailbox.id))}>{mailbox.address}</button>)}
           {!loadingSetup && !mailboxes.length && <span className="sidebar-hint">Add mailboxes in Settings</span>}
         </nav>
         <div className="sidebar-bottom"><span className="account-avatar">{(user.name || 'A').charAt(0).toUpperCase()}</span><span className="account-name" title={user.name}>Signed in as <strong>{user.name}</strong></span></div>
@@ -507,7 +531,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
           <div className="workspace-heading"><div><h1>{folderInfo.title}</h1><p className="intro">{isSettings ? 'Manage the domains and addresses connected to your inbox.' : selectedMailbox ? `Viewing messages for ${mailboxes.find((item) => String(item.id) === String(selectedMailbox))?.address || 'selected mailbox'}` : 'Your mail, organized in one place.'}</p></div></div>
           {setupError && <div className="form-alert error" role="alert">{setupError}</div>}
           {sendNotice && <div className="form-alert success" role="status">{sendNotice}</div>}
-          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} onRead={onMessageRead} onAction={async (action, id) => { const result = await api("/messages/actions", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": csrf }, body: JSON.stringify({ action, ids: [Number(id)] }) }); onMessageMutation(); closeMessage(); return result; }} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} query={searchQuery} page={page} onPageChange={navigateToPage} csrf={csrf} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} onMutation={onMessageMutation} />}
+          {isSettings ? <DomainSettings domains={domains} mailboxes={mailboxes} refresh={refresh} csrf={csrf} onExpired={onExpired} /> : openedMessageId ? <MessageReader messageId={openedMessageId} csrf={csrf} onBack={closeMessage} onExpired={onExpired} onReply={openReply} onRead={onMessageRead} onLoaded={onMessageLoaded} onAction={async (action, id) => { const result = await api("/messages/actions", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": csrf }, body: JSON.stringify({ action, ids: [Number(id)] }) }); onMessageMutation(); closeMessage(); return result; }} /> : <MessagesPanel folder={folderInfo.folder} mailboxes={mailboxes} selectedMailbox={selectedMailbox} query={searchQuery} page={page} onPageChange={navigateToPage} csrf={csrf} onExpired={onExpired} onOpenMessage={openMessage} onOpenDraft={(id) => startCompose({ draftId: id })} onMutation={onMessageMutation} />}
           {isSettings && <details className="workspace-system"><summary>System health</summary><div className="status-grid"><div className="status-card"><div>Laravel API</div><strong>{apiStatus.status}</strong><span>Backend service</span></div><div className="status-card"><div>PostgreSQL</div><strong>{apiStatus.database}</strong><span>Private database</span></div><div className="status-card"><div>Mailboxes</div><strong>{mailboxes.length}</strong><span>Configured addresses</span></div></div><p className="notice">Incoming mail uses Cloudflare R2. Outgoing mail uses your configured SMTP provider.</p></details>}
         </main>
       </div>
