@@ -98,5 +98,41 @@ class ActivateEmailRoutingTests(unittest.TestCase):
                 m.list_apex_records('redacted', 'abcd', 'santasbag.ca', 'MX')
 
 
+    def test_selected_domain_preflight_does_not_inspect_other_zones(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        with patch.object(m, "preflight_zone", return_value={
+             "domain": "madenorth.dev", "zone": "made-zone", "action": "activate"}) as check, \
+             redirect_stdout(StringIO()):
+            results, errors = m.preflight("redacted", ("madenorth.dev",))
+        check.assert_called_once_with("redacted", "madenorth.dev")
+        self.assertEqual([r["domain"] for r in results], ["madenorth.dev"])
+        self.assertEqual(errors, [])
+
+    def test_apply_selected_domain_never_writes_other_zone_dns(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+        writes = []
+        def api(method, path, token):
+            if method == "POST":
+                writes.append(path)
+                return {"result": {"name": "madenorth.dev"}}
+            return {"result": {"name": "madenorth.dev", "enabled": True, "status": "ready"}}
+        with patch.object(m.sys, "argv", ["script", "--domain", "madenorth.dev", "--apply"]), \
+             patch.object(m.catchalls.deploy, "validate_source"), \
+             patch.object(m.catchalls.deploy, "credential", return_value="redacted"), \
+             patch.object(m, "preflight_zone", return_value={
+                 "domain": "madenorth.dev", "zone": "made-zone", "action": "activate"}) as inspected, \
+             patch.object(m.catchalls.deploy, "deploy_worker") as worker, \
+             patch.object(m.catchalls, "verify_live_worker"), \
+             patch.object(m.catchalls.deploy, "api", side_effect=api), \
+             redirect_stdout(StringIO()):
+            m.main()
+        self.assertEqual(inspected.call_count, 2)
+        for call in inspected.call_args_list:
+            self.assertEqual(call.args, ("redacted", "madenorth.dev"))
+        worker.assert_called_once_with("redacted")
+        self.assertEqual(writes, ["/zones/made-zone/email/routing/dns"])
+
 if __name__ == "__main__":
     unittest.main()
