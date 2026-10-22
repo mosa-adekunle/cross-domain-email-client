@@ -202,5 +202,45 @@ class ActivateEmailRoutingTests(unittest.TestCase):
                 m.list_apex_records("redacted", "abcd", "santasbag.ca", "MX")
         fallback.assert_not_called()
 
+    def test_unrelated_txt_disagreement_does_not_block_spf_safety_check(self):
+        from io import BytesIO
+        import json
+        replies = iter([
+            {"Status": 0, "Answer": [
+                {"type": 16, "name": "delishearsentertainment.com.",
+                 "data": '"google-site-verification=old-token"'}]},
+            {"Status": 0, "Answer": [
+                {"type": 16, "name": "delishearsentertainment.com.",
+                 "data": '"google-site-verification=new-token"'}]},
+        ])
+        with patch.object(m, "urlopen", side_effect=lambda *a, **kw: BytesIO(json.dumps(next(replies)).encode())):
+            self.assertEqual(m.public_apex_records("delishearsentertainment.com", "TXT"), [])
+
+    def test_spf_disagreement_still_blocks_activation(self):
+        from io import BytesIO
+        import json
+        replies = iter([
+            {"Status": 0, "Answer": [
+                {"type": 16, "name": "delishearsentertainment.com.",
+                 "data": '"v=spf1 include:sender.example ~all"'}]},
+            {"Status": 0, "Answer": [
+                {"type": 16, "name": "delishearsentertainment.com.",
+                 "data": '"google-site-verification=site-key"'}]},
+        ])
+        with patch.object(m, "urlopen", side_effect=lambda *a, **kw: BytesIO(json.dumps(next(replies)).encode())):
+            with self.assertRaisesRegex(RuntimeError, "resolvers disagree"):
+                m.public_apex_records("delishearsentertainment.com", "TXT")
+
+    def test_existing_matching_spf_still_blocks_activation(self):
+        from io import BytesIO
+        import json
+        response = {"Status": 0, "Answer": [
+            {"type": 16, "name": "delishearsentertainment.com.",
+             "data": '"v=spf1 include:sender.example ~all"'}]}
+        with patch.object(m, "urlopen", side_effect=lambda *a, **kw: BytesIO(json.dumps(response).encode())):
+            records = m.public_apex_records("delishearsentertainment.com", "TXT")
+            self.assertEqual(len(records), 1)
+            self.assertIn("v=spf1", records[0]["content"])
+
 if __name__ == "__main__":
     unittest.main()
