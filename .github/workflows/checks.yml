@@ -72,3 +72,9 @@ jobs:
       - name: Shell syntax validation
         run: |
           find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Certificate script command checks
+        run: |
+          bash -n scripts/renew-domain-https.sh
+          bash -n scripts/renew-ip-https.sh
+          grep -Fq '"$IMAGE" run' scripts/renew-domain-https.sh
+          grep -Fq '"$IMAGE" run' scripts/renew-ip-https.sh
