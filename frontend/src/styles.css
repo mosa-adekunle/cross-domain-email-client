@@ -1001,3 +1001,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Domain-branded login uses the same untouched company SVG as the mail sidebar. */
 .identity.auth-logo { display: block; padding: 0 0 26px; }
 .identity.auth-logo .brand-logo { display: block; width: 246px; max-width: 100%; height: auto; }
+
+/* Gmail-style paginated mailbox toolbar (range + newer/older arrows). */
+.mail-list-tools { gap: 7px; }
+.mail-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  white-space: nowrap;
+}
+.mail-pager-range {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: #5f6368;
+  margin: 0 9px 0 7px;
+}
+.mail-pager-arrow { color: #445266; width: 32px; height: 32px; }
+.mail-pager-arrow:hover:not(:disabled) { background: #e9eef5; }
+.mail-pager-arrow:focus-visible { outline: 2px solid #0b57d0; outline-offset: 2px; }
+@media (max-width: 780px) {
+  .mail-list-toolbar { flex-wrap: wrap; }
+  .mail-list-heading { flex: 1 1 100%; }
+  .mail-list-tools { width: 100%; justify-content: flex-end; }
+  .mail-pager-range { font-size: 11px; margin-right: 4px; }
+}
