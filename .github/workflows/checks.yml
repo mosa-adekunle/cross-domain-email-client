@@ -47,12 +47,16 @@ jobs:
           openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" \
             -keyout "$RUNNER_TEMP/cdec-mime-cert/privkey.pem" \
             -out "$RUNNER_TEMP/cdec-mime-cert/fullchain.pem" >/dev/null 2>&1
+          mkdir -p "$RUNNER_TEMP/cdec-mime-domain-cert"
+          cp "$RUNNER_TEMP/cdec-mime-cert/fullchain.pem" "$RUNNER_TEMP/cdec-mime-domain-cert/fullchain.pem"
+          cp "$RUNNER_TEMP/cdec-mime-cert/privkey.pem" "$RUNNER_TEMP/cdec-mime-domain-cert/privkey.pem"
           # The standalone static-asset test has no Laravel Compose service.
           # Supply only its hostname for nginx startup; no backend is needed.
           docker run -d --name cdec-pdf-mime-ci \
             --add-host api:127.0.0.1 \
             -p 127.0.0.1:18081:80 \
             -v "$RUNNER_TEMP/cdec-mime-cert:/etc/nginx/tls:ro" \
+            -v "$RUNNER_TEMP/cdec-mime-domain-cert:/etc/nginx/domain-tls:ro" \
             cdec-web-mime-test
           trap 'docker logs cdec-pdf-mime-ci || true; docker rm -f cdec-pdf-mime-ci || true' EXIT
           docker exec cdec-pdf-mime-ci nginx -t
