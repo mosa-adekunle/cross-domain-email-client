@@ -1027,3 +1027,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .mail-list-tools { width: 100%; justify-content: flex-end; }
   .mail-pager-range { font-size: 11px; margin-right: 4px; }
 }
+
+/* In the message reader, show the actual mailbox for the opened email.
+   This is independent of whether the list was filtered to All mailboxes. */
+.message-headers > .message-header-mailbox {
+  width: fit-content;
+  max-width: 100%;
+  background: #e4edf9;
+  border-radius: 16px;
+  padding: 4px 12px 4px 8px;
+  margin: 2px 0 0 -8px;
+}
+.message-headers > .message-header-mailbox dt { color: #174ea6; font-weight: 650; }
+.message-headers > .message-header-mailbox dd { color: #174ea6; font-weight: 650; }
