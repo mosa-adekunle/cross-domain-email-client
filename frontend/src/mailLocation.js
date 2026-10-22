@@ -8,10 +8,14 @@ export function readMailLocation(search) {
   const folder = params.get('folder');
   const mailboxId = params.get('mailbox_id') || '';
   const messageId = params.get('message') || '';
+  const rawPage = params.get('page') || '';
+  const page = /^[1-9][0-9]*$/.test(rawPage) && Number(rawPage) <= 10000
+    ? Number(rawPage) : 1;
   return {
     folder: mailFolderIds.includes(folder) ? folder : 'inbox',
     mailboxId: /^[1-9][0-9]*$/.test(mailboxId) ? mailboxId : '',
     messageId: /^[1-9][0-9]*$/.test(messageId) ? messageId : null,
+    page,
   };
 }
 
@@ -27,7 +31,19 @@ export function mailLocationUrl(href, { folder, mailboxId }) {
   } else {
     url.searchParams.delete('mailbox_id');
   }
-  // Changing folders closes a currently opened message.
+  // Changing folders starts at the first page and closes the message.
+  url.searchParams.delete('page');
+  url.searchParams.delete('message');
+  return url.pathname + url.search + url.hash;
+}
+
+export function mailPageUrl(href, page) {
+  const url = new URL(href);
+  if (Number.isSafeInteger(page) && page >= 2 && page <= 10000) {
+    url.searchParams.set('page', String(page));
+  } else {
+    url.searchParams.delete('page');
+  }
   url.searchParams.delete('message');
   return url.pathname + url.search + url.hash;
 }
