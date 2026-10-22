@@ -35,9 +35,10 @@ jobs:
           php backend/artisan route:list --path=api/drafts
           php backend/artisan route:list --path=api/outbound
           php backend/artisan route:list --path=api/messages/actions
-      - name: Frontend production build
+      - name: Frontend navigation tests and production build
         run: |
           npm install --prefix frontend --no-audit --no-fund
+          npm test --prefix frontend
           npm run build --prefix frontend
       - name: PDF.js worker MIME integration test in production Nginx
         run: |
