@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import MessageReader from './MessageReader.jsx';
 import ComposeMail from './ComposeMail.jsx';
+import { readMailLocation, mailLocationUrl } from './mailLocation.js';
 
 const folders = [
   { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
@@ -322,7 +323,10 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, csrf, onExpi
 }
 
 export default function Workspace({ user, csrf, onLogout, signingOut, onExpired }) {
-  const [activeFolder, setActiveFolder] = useState('Unified inbox');
+  const [activeFolder, setActiveFolder] = useState(() => {
+    const { folder } = readMailLocation(window.location.search);
+    return folders.find((item) => item.folder === folder)?.label || 'Unified inbox';
+  });
   const [composer, setComposer] = useState(null);
   const [sendNotice, setSendNotice] = useState('');
   const [apiStatus, setApiStatus] = useState({ status: 'checking', database: 'checking' });
@@ -330,14 +334,14 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   const [mailboxes, setMailboxes] = useState([]);
   const [loadingSetup, setLoadingSetup] = useState(true);
   const [setupError, setSetupError] = useState('');
-  const [selectedMailbox, setSelectedMailbox] = useState('');
+  const [selectedMailbox, setSelectedMailbox] = useState(() => readMailLocation(window.location.search).mailboxId);
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadRefreshKey, setUnreadRefreshKey] = useState(0);
   const onMessageRead = useCallback(() => setUnreadRefreshKey((value) => value + 1), []);
   const onMessageMutation = useCallback(() => setUnreadRefreshKey((value) => value + 1), []);
-  const [openedMessageId, setOpenedMessageId] = useState(() => { const id = new URLSearchParams(window.location.search).get('message'); return id && /^[1-9][0-9]*$/.test(id) ? id : null; });
+  const [openedMessageId, setOpenedMessageId] = useState(() => readMailLocation(window.location.search).messageId);
 
   const refresh = useCallback(async () => {
     try {
@@ -389,7 +393,16 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   }, [selectedMailbox, unreadRefreshKey, onExpired]);
 
   useEffect(() => {
-    const sync = () => { const id = new URLSearchParams(window.location.search).get('message'); setOpenedMessageId(id && /^[1-9][0-9]*$/.test(id) ? id : null); };
+    // Browser Back / Forward restores the whole mail view, not only a message.
+    const sync = () => {
+      const { folder, mailboxId, messageId } = readMailLocation(window.location.search);
+      setActiveFolder(folders.find((item) => item.folder === folder)?.label || 'Unified inbox');
+      setSelectedMailbox(mailboxId);
+      setOpenedMessageId(messageId);
+      setSearchInput('');
+      setSearchQuery('');
+      setComposer(null);
+    };
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
   }, []);
@@ -408,6 +421,16 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     setOpenedMessageId(null);
   };
 
+  const navigateToView = (label, mailboxId) => {
+    const folder = folders.find((item) => item.label === label)?.folder || 'inbox';
+    const target = mailLocationUrl(window.location.href, { folder, mailboxId });
+    const current = window.location.pathname + window.location.search + window.location.hash;
+    if (target !== current) window.history.pushState(null, '', target);
+    setActiveFolder(label);
+    setSelectedMailbox(String(mailboxId || ''));
+    setOpenedMessageId(null);
+  };
+
   const folderInfo = folders.find((item) => item.label === activeFolder);
   const startCompose = (options = {}) => { closeMessage(); setSendNotice(''); setComposer(options); };
   const openReply = (message, forward = false) => {
@@ -423,12 +446,11 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   const isSettings = activeFolder === 'Settings';
   const isReady = apiStatus.status === 'ready';
   const selectFolder = (label) => {
-    setActiveFolder(label);
+    navigateToView(label, selectedMailbox);
     setComposer(null);
     setSendNotice('');
     setSearchInput('');
     setSearchQuery('');
-    closeMessage();
   };
   return (
     <div className="shell">
@@ -440,8 +462,8 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
         </nav>
         <div className="section-label mailbox-label">MAILBOXES</div>
         <nav aria-label="Mailboxes" className="mailbox-nav">
-          <button type="button" className={`mailbox-link ${selectedMailbox === '' ? 'selected' : ''}`} onClick={() => { setSelectedMailbox(''); if (isSettings) setActiveFolder('Unified inbox'); closeMessage(); }}>All mailboxes</button>
-          {mailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${String(selectedMailbox) === String(mailbox.id) ? 'selected' : ''}`} title={mailbox.address} onClick={() => { setSelectedMailbox(String(mailbox.id)); if (isSettings) setActiveFolder('Unified inbox'); closeMessage(); }}>{mailbox.address}</button>)}
+          <button type="button" className={`mailbox-link ${selectedMailbox === '' ? 'selected' : ''}`} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, '')}>All mailboxes</button>
+          {mailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${String(selectedMailbox) === String(mailbox.id) ? 'selected' : ''}`} title={mailbox.address} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, String(mailbox.id))}>{mailbox.address}</button>)}
           {!loadingSetup && !mailboxes.length && <span className="sidebar-hint">Add mailboxes in Settings</span>}
         </nav>
         <div className="sidebar-bottom"><span className="account-avatar">{(user.name || 'A').charAt(0).toUpperCase()}</span><span className="account-name" title={user.name}>Signed in as <strong>{user.name}</strong></span></div>
@@ -466,7 +488,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
           {isSettings && <details className="workspace-system"><summary>System health</summary><div className="status-grid"><div className="status-card"><div>Laravel API</div><strong>{apiStatus.status}</strong><span>Backend service</span></div><div className="status-card"><div>PostgreSQL</div><strong>{apiStatus.database}</strong><span>Private database</span></div><div className="status-card"><div>Mailboxes</div><strong>{mailboxes.length}</strong><span>Configured addresses</span></div></div><p className="notice">Incoming mail uses Cloudflare R2. Outgoing mail uses your configured SMTP provider.</p></details>}
         </main>
       </div>
-      {composer && <ComposeMail key={composer.draftId || 'new'} csrf={csrf} mailboxes={mailboxes} selectedMailbox={selectedMailbox} draftId={composer.draftId || null} initial={composer.initial} onClose={() => setComposer(null)} onExpired={onExpired} onSent={(receipt) => { setComposer(null); setActiveFolder('Sent'); setSendNotice(receipt.message); }} />}
+      {composer && <ComposeMail key={composer.draftId || 'new'} csrf={csrf} mailboxes={mailboxes} selectedMailbox={selectedMailbox} draftId={composer.draftId || null} initial={composer.initial} onClose={() => setComposer(null)} onExpired={onExpired} onSent={(receipt) => { setComposer(null); navigateToView('Sent', selectedMailbox); setSendNotice(receipt.message); }} />}
     </div>
   );
 }
