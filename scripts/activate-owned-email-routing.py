@@ -35,9 +35,11 @@ DOMAINS = catchalls.DOMAINS
 def public_apex_records(domain, kind):
     """Fail-closed DNS inventory when the Cloudflare DNS API returns 403.
 
-    Two independent public DNS resolvers must agree on the published apex
-    records. We *never* trust the Email Routing required-DNS endpoint as a
-    current DNS inventory. If results conflict/are invalid, refuse activation.
+    Two independent public DNS resolvers must agree on published apex MX and
+    SPF TXT records. Unrelated TXT records cannot conflict with MX/SPF and
+    may differ due to DNS propagation; ignore those, never ignore SPF drift.
+    We *never* trust the Email Routing required-DNS endpoint as a current
+    DNS inventory. If relevant results conflict/are invalid, refuse activation.
     """
     qtype = {"MX": 15, "TXT": 16}[kind]
     urls = (
@@ -69,6 +71,13 @@ def public_apex_records(domain, kind):
             if not isinstance(item.get("data"), str) or not item["data"]:
                 raise RuntimeError(f"DNS answer has no valid {kind} record at {domain}.")
             records.add(item["data"].strip().lower())
+        # Only MX and SPF TXT records can conflict with Email Routing.
+        # Unrelated TXT records can differ across caches during propagation.
+        # Keep failing closed when SPF differs between resolvers.
+        if kind == "TXT":
+            records = {value for value in records if re.search(
+                r'(?i)(?:^|[\\"])\\s*v=spf1(?:\\s|$)', value
+            )}
         inventories.append(records)
 
     if inventories[0] != inventories[1]:
@@ -76,7 +85,8 @@ def public_apex_records(domain, kind):
             f"Independent resolvers disagree on published apex {kind} DNS for {domain}; "
             "wait for DNS propagation or review records before activation."
         )
-    print(f"{domain}: DNS API unavailable; independent public resolvers agree on {len(inventories[0])} apex {kind} record(s).")
+    checked = "SPF TXT" if kind == "TXT" else "MX"
+    print(f"{domain}: DNS API unavailable; both resolvers agree on {len(inventories[0])} apex {checked} record(s).")
     return [{"name": domain, "type": kind, "content": value} for value in sorted(inventories[0])]
 
 
