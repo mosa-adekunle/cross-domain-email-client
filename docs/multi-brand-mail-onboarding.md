@@ -123,6 +123,33 @@ No active rules for sales@receiptboss.ca or hello@receiptboss.ca were shown. Add
 - Switch **privacy@receiptboss.ca** to Send to Worker by **editing the existing rule** (not adding a duplicate) only after verifying the secret and code are deployed, then test that the same message arrives in **both** Gmail and Made North Mail. Restore the previous Gmail-only action if either destination fails, and investigate before switching **legal@receiptboss.ca**.
 - Keep `support@receiptboss.ca` forwarding as-is; preserve existing rules on other domains until individually reviewed.
 
+### ReceiptBoss Privacy: reversible first dual-delivery test
+
+**Do not migrate Legal and Privacy together.** Privacy is the first address to move after Sales and Hello are receiving successfully.
+
+The new `scripts/migrate-receiptboss-privacy.py` script checks production Cloudflare Worker bindings, the encrypted forwarding secret (existence/type only), the enabled `inbox-test` pilot, the existing Gmail-forwarding rule for Privacy, and the unchanged Legal and Support rules. Cloudflare never reveals the secret's value via its API, so this does **not** establish that its destination is correct; the full delivery test remains essential.
+
+From the existing EC2 host, using the previously stored private Cloudflare deploy token:
+
+```bash
+cd ~/cross-domain-email-client
+git pull --ff-only origin main
+python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+python3 scripts/migrate-receiptboss-privacy.py          # preview only
+python3 scripts/migrate-receiptboss-privacy.py --apply  # migrate ONLY Privacy
+```
+
+The live rule is updated with Cloudflare's zone-scoped Email Routing Rules API. Before that write, the exact Gmail-forwarding route is backed up at `~/.config/cdec/receiptboss-privacy-original-route.json` (mode `0600`). Legal, Support, and Sales/Hello remain untouched.
+
+Immediately send a **new** email to `privacy@receiptboss.ca` from an unrelated provider. Verify the message arrives in **both** the existing Gmail inbox and the Privacy mailbox at `mail.madenorth.dev` after the R2 importer runs. If either copy fails or Cloudflare reports an error, restore the former rule immediately:
+
+```bash
+cd ~/cross-domain-email-client
+python3 scripts/migrate-receiptboss-privacy.py --rollback
+```
+
+Do not switch Legal until the Privacy dual-delivery test has passed.
+
 ### Live routing must be verified address-by-address
 
 For each domain, confirm that Cloudflare Email Routing already owns the relevant incoming MX records. If not, migrate deliberately and only after identifying the current provider and any dependent mailboxes. For each approved address create or update the explicit per-recipient route to `cdec-inbound-archive`, *only when preserving any required existing forwarding*. Never use a catch-all. Test each address from an unrelated provider, confirm raw MIME in R2 and a successful import, and check arrival in the unified mailbox UI. Do not enable outgoing for `madenorth.dev` until Resend reports verified. After testing delivery, clear the pending flag for each new identity through a separately reviewed activation procedure.
