@@ -19,7 +19,7 @@ class MessageActionController
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1', 'max:100'],
             'ids.*' => ['required', 'integer', 'min:1', 'distinct'],
-            'action' => ['required', Rule::in(['trash', 'restore', 'archive', 'read', 'unread', 'star', 'unstar'])],
+            'action' => ['required', Rule::in(['trash', 'restore', 'archive', 'unarchive', 'read', 'unread', 'star', 'unstar'])],
         ]);
 
         $action = $data['action'];
@@ -61,6 +61,10 @@ class MessageActionController
                         if ($message->folder !== 'inbox') continue 2;
                         $change['folder'] = 'archive';
                         break;
+                    case 'unarchive':
+                        if ($message->folder !== 'archive') continue 2;
+                        $change['folder'] = 'inbox';
+                        break;
                     case 'read':
                     case 'unread':
                         $change['is_read'] = $action === 'read';
@@ -80,6 +84,7 @@ class MessageActionController
             'trash' => 'Moved to Trash.',
             'restore' => 'Restored to the original folder.',
             'archive' => 'Archived.',
+            'unarchive' => 'Moved to Inbox.',
             'read' => 'Marked as read.',
             'unread' => 'Marked as unread.',
             'star' => 'Starred.',
