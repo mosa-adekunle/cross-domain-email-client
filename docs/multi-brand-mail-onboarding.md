@@ -57,11 +57,53 @@ cd workers/email-archive
 npm install --no-audit --no-fund
 npm test
 npx wrangler whoami || npx wrangler login
-npx wrangler deploy --dry-run --keep-vars
-npx wrangler deploy --keep-vars
+# Ensure live dashboard variables do not include intentional extra settings.
+# Configured repository vars are authoritative; Worker secrets are preserved.
+npx wrangler deploy --dry-run
+npx wrangler deploy
 ```
 
 These commands publish the Worker code and allowlist; they do **not** create Email Routing rules. Preserve and test the existing ReceiptBoss `support`, `legal`, and `privacy` forwarding arrangements before changing the respective Cloudflare actions. Adding a Worker action can replace existing forwarding behavior if you edit an active rule.
+
+### ReceiptBoss routing audit and dual delivery (2026-10-22)
+
+Verified from the Cloudflare Email Routing screenshot:
+
+| Rule | Current action | Keep until tested |
+| --- | --- | --- |
+| Catch-all (disabled) | Drop | Yes; do not turn on catch-all |
+| inbox-test@receiptboss.ca | Send to cdec-inbound-archive | Yes; working pilot |
+| support@receiptboss.ca | Forward to previously verified Gmail | Yes; not requested for onboarding |
+| privacy@receiptboss.ca | Forward to previously verified Gmail | Yes; **requires dual delivery** |
+| legal@receiptboss.ca | Forward to previously verified Gmail | Yes; **requires dual delivery** |
+
+No active rules for sales@receiptboss.ca or hello@receiptboss.ca were shown. Add them **only after** confirming that the Worker is deployed with the updated explicit allowlist and the private R2 binding works.
+
+**Cloudflare only uses the first matching rule.** Do not create two rules for the same email address. Use the existing Email Worker with both operations for the old Gmail-forwarded accounts.
+
+#### Deploy the Worker safely before rerouting any production legal/privacy mail
+
+- In the Cloudflare account used by ReceiptBoss, verify the Gmail destination is already confirmed in **Email Routing → Destination addresses** (the existing active rules strongly suggest that it is).
+- Store that destination **only** as a Cloudflare Worker Secret named `LEGACY_FORWARD_DESTINATION` for `cdec-inbound-archive`, via Workers & Pages → Worker → Settings → Variables and Secrets → Add → **Secret**. Enter the same verified Gmail destination used by the existing legal/privacy rules. Do **not** commit its value to Git, Wrangler `vars`, an issue, or logs.
+- Wrangler source controls `ALLOWED_RECIPIENTS` (the 11 approved new identities plus the test address) and `LEGACY_FORWARD_RECIPIENTS=legal@receiptboss.ca,privacy@receiptboss.ca`. The Worker fails closed if a legacy recipient is routed without its verified destination secret or message.forward API.
+- From a trusted machine with Node and a Cloudflare login authorized for the correct account, execute:
+
+  ```bash
+  git pull --ff-only origin main
+  cd workers/email-archive
+  npm install --no-audit --no-fund
+  npm test
+  npx wrangler whoami
+  npx wrangler deploy --dry-run
+  npx wrangler deploy
+  ```
+
+  **Do not use `--keep-vars`** for this rollout: the repository config is the source of truth for `ALLOWED_RECIPIENTS` and `LEGACY_FORWARD_RECIPIENTS`, and the flag can retain stale dashboard values. Cloudflare states that deployment preserves Worker **secrets**. Verify no other intentional dashboard-only plaintext variables need preservation before proceeding.
+
+- R2 and forwarding happen **in sequence**: the Worker archives the original MIME in private R2, and then calls `await message.forward(verifiedDestination)`. A failed R2 write prevents forwarding; a forwarding error propagates after archival. Test with controlled messages before changing a real forwarding rule. Downstream Gmail filters and Cloudflare delivery statuses must be checked.
+- Create **sales@receiptboss.ca** and **hello@receiptboss.ca** explicit Send-to-Worker rules first. Test an external message to each; confirm R2 object metadata and imported inbox appearance.
+- Switch **privacy@receiptboss.ca** to Send to Worker by **editing the existing rule** (not adding a duplicate) only after verifying the secret and code are deployed, then test that the same message arrives in **both** Gmail and Made North Mail. Restore the previous Gmail-only action if either destination fails, and investigate before switching **legal@receiptboss.ca**.
+- Keep `support@receiptboss.ca` forwarding as-is; preserve existing rules on other domains until individually reviewed.
 
 ### Live routing must be verified address-by-address
 
