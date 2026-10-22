@@ -10,11 +10,21 @@ export default {
   async email(message, env) {
     const recipient = normalizeAddress(message.to);
     const allowed = new Set((env.ALLOWED_RECIPIENTS || '').split(',').map(normalizeAddress).filter(Boolean));
+    const forwardRecipients = new Set((env.LEGACY_FORWARD_RECIPIENTS || '').split(',').map(normalizeAddress).filter(Boolean));
+    const forwardAddress = normalizeAddress(env.LEGACY_FORWARD_DESTINATION);
 
     // Fail closed: an unconfigured Worker must never archive arbitrary mail.
     if (!recipient || !allowed.has(recipient)) {
       message.setReject('Mailbox is not configured for delivery');
       return;
+    }
+
+    // A legacy-forwarded address must never be silently archived without
+    // keeping its existing verified destination. The destination is configured
+    // as a Cloudflare Worker secret, not committed to the public repository.
+    if (forwardRecipients.has(recipient) &&
+        (!/^[^\s@]+@[^\s@]+$/.test(forwardAddress) || typeof message.forward !== 'function')) {
+      throw new Error('Verified legacy forwarding destination is not configured');
     }
 
     if (!Number.isSafeInteger(message.rawSize) || message.rawSize < 1 || message.rawSize > MAX_EMAIL_BYTES) {
@@ -71,7 +81,13 @@ export default {
     }
 
     if (!stored) throw new Error('R2 archive failed to confirm the write');
-    // Success means only that R2 accepted the original MIME object.
-    // Laravel imports it asynchronously over R2's S3 API.
+
+    // This path runs only for addresses that previously forwarded to Gmail.
+    // Cloudflare requires message.forward() to target a verified destination.
+    // Both operations are awaited; never swallow forwarding failures.
+    if (forwardRecipients.has(recipient)) {
+      await message.forward(forwardAddress);
+    }
+    // Laravel imports the durable MIME archive asynchronously over R2's S3 API.
   },
 };
