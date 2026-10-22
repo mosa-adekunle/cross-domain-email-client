@@ -76,7 +76,7 @@ def public_apex_records(domain, kind):
         # Keep failing closed when SPF differs between resolvers.
         if kind == "TXT":
             records = {value for value in records if re.search(
-                r'(?i)(?:^|[\\"])\\s*v=spf1(?:\\s|$)', value
+                r'(?i)(?:^|["])\s*v=spf1(?:\s|$)', value
             )}
         inventories.append(records)
 
