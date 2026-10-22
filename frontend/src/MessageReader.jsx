@@ -197,6 +197,9 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
             {message.cc && <div><dt>Cc</dt><dd>{message.cc}</dd></div>}
             {message.bcc && message.direction !== 'incoming' && <div><dt>Bcc</dt><dd>{message.bcc}</dd></div>}
             {message.delivery_status && <div><dt>Delivery</dt><dd>{message.delivery_status === 'accepted' ? 'Accepted by outbound provider' : message.delivery_status}</dd></div>}
+            {message.mailbox_address?.startsWith('catchall@') && message.to_addresses?.length > 0 && (
+              <div><dt>Delivered to</dt><dd>{message.to_addresses.join(', ')}</dd></div>
+            )}
             <div className="message-header-mailbox"><dt>Mailbox</dt><dd>{message.mailbox_address}</dd></div>
           </dl>
           <div className="message-body">
