@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readMailLocation, mailLocationUrl } from '../src/mailLocation.js';
+import { readMailLocation, mailLocationUrl, mailPageUrl } from '../src/mailLocation.js';
 
 test('defaults to Inbox when folder is missing or invalid', () => {
   assert.equal(readMailLocation('?utm_source=chatgpt.com').folder, 'inbox');
@@ -22,7 +22,7 @@ test('restores the selected mailbox and clears opened message on folder change',
     folder: 'archive', mailboxId: '2',
   });
   assert.deepEqual(readMailLocation(new URL(url, 'https://mail.madenorth.dev').search), {
-    folder: 'archive', mailboxId: '2', messageId: null,
+    folder: 'archive', mailboxId: '2', messageId: null, page: 1,
   });
 });
 
@@ -40,4 +40,32 @@ test('preserves message deep links on initial load and does not lose fragments',
     folder: 'inbox', mailboxId: '',
   });
   assert.equal(result, '/#mail');
+});
+
+test('page number survives a refresh without losing folder and selected mailbox', () => {
+  const url = mailPageUrl('https://mail.madenorth.dev/?folder=sent&mailbox_id=3&utm_source=chatgpt.com', 4);
+  const parsed = new URL(url, 'https://mail.madenorth.dev');
+  assert.deepEqual(readMailLocation(parsed.search), {
+    folder: 'sent', mailboxId: '3', messageId: null, page: 4,
+  });
+  assert.equal(parsed.searchParams.get('utm_source'), 'chatgpt.com');
+  assert.equal(mailPageUrl('https://mail.madenorth.dev/?page=4&folder=sent', 1), '/?folder=sent');
+});
+
+test('folder switches reset page to 1 and close opened message', () => {
+  const url = mailLocationUrl('https://mail.madenorth.dev/?folder=archive&page=4&message=17', {
+    folder: 'trash', mailboxId: '2',
+  });
+  assert.deepEqual(readMailLocation(new URL(url, 'https://mail.madenorth.dev').search), {
+    folder: 'trash', mailboxId: '2', messageId: null, page: 1,
+  });
+});
+
+test('invalid and out-of-range pages do not change the first page', () => {
+  for (const value of ['0', '-4', '1.5', '10001', 'abc', '1x', '99999999999999999']) {
+    assert.equal(readMailLocation('?page=' + encodeURIComponent(value)).page, 1);
+  }
+  assert.equal(readMailLocation('?page=10000').page, 10000);
+  assert.equal(mailPageUrl('https://mail.madenorth.dev/', 10001), '/');
+  assert.equal(mailPageUrl('https://mail.madenorth.dev/?page=7&message=12', 2), '/?page=2');
 });
