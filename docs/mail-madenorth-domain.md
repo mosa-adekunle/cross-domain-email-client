@@ -1,52 +1,41 @@
-# mail.madenorth.dev: secure direct HTTPS on existing EC2
+# mail.madenorth.dev: HTTPS through the shared Made North Caddy gateway
 
-Use the existing single Ubuntu 24.04 ARM64 EC2 instance and Elastic IP `52.14.33.209`. The application's code remains in `mosa-adekunle/cross-domain-email-client`, and the web browser title remains **Mail - Made North Technologies**. This is **not a Cloudflare Tunnel**. The existing direct-IP browser URL also remains functional.
+> Current architecture, October 2026. This supersedes the older standalone
+> Nginx/IP-certificate procedure in the repository.
 
-## 1. DNS record (at madenorth.dev's authoritative DNS provider)
+Made North's shared **Caddy gateway** owns public TCP/443, HTTPS certificates, SNI routing, and the public https://mail.madenorth.dev hostname. The Cross Domain Email Client is an **internal HTTP upstream** on 127.0.0.1:8080, served by its Nginx web container. Laravel (api) and PostgreSQL (db) stay on the private Docker network.
 
-| Type | Host/name | IPv4 / content | TTL | Proxy |
-| --- | --- | --- | --- | --- |
-| A | mail | 52.14.33.209 | Auto | **DNS only** (if Cloudflare) |
+The mail application remains in GitHub repository mosa-adekunle/cross-domain-email-client, server directory /home/ubuntu/cross-domain-email-client. The corporate website and its Caddy gateway are maintained separately. Do not modify the website Caddy configuration from the mail repository without inspecting its source.
 
-Do not change the apex `madenorth.dev`, its `www` address, or any MX / TXT mail records. Do not add an AAAA record pointing somewhere else. Check existing `mail` records for conflicts. In Cloudflare, a **gray-cloud DNS-only** record is necessary because direct Let's Encrypt TLS-ALPN-01 on port 443 must reach this EC2 host for both issuance and renewal. Cloudflare's HTTP reverse proxy would otherwise intercept the ALPN handshake. If the domain's DNS is managed elsewhere, create the same direct A record there. Wait until DNS resolves *only* to `52.14.33.209`.
+## Network model
 
-## 2. On the application EC2 host
+    Browser → https://mail.madenorth.dev:443 → Caddy gateway
+                                                      ↓ HTTP
+                                        127.0.0.1:8080 → mail Nginx
+                                                      ↓ FastCGI
+                                                  Laravel API → PostgreSQL
 
-Run the following in a normal shell after step 1. The mail service and PostgreSQL will remain on the same server. **Certificate issuance/renewal briefly stops the web container**, but does not stop the API or PostgreSQL.
+Cloudflare DNS retains the mail A record pointing to the host. Do **not** modify business-domain root A/AAAA, website DNS, MX, SPF, DKIM, DMARC, Email Routing rules or R2 to deploy app changes.
 
-```bash
-set -e
-cd ~/cross-domain-email-client
-git pull --ff-only origin main
-git rev-parse --short HEAD
-sudo docker compose config --quiet
-# Reuses the email previously saved for the IP certificate; only on first-time
-# machines without one, run with ACME_EMAIL=your-real-contact@example.com.
-sudo bash scripts/renew-domain-https.sh
-sudo docker compose build api web
-sudo docker compose up -d --no-deps --force-recreate api web
-sudo install -m 0644 systemd/cdec-domain-https-renew.service /etc/systemd/system/
-sudo install -m 0644 systemd/cdec-domain-https-renew.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now cdec-domain-https-renew.timer
-bash scripts/verify-domain-https.sh
-sudo docker compose ps
-```
+## Verification
 
-If `runtime/ip-https/contact-email` does not exist, use `sudo ACME_EMAIL=your-reachable-address@example.com bash scripts/renew-domain-https.sh` for first issuance. Avoid placing passwords or tokens in the repo or shell history.
+On the application EC2 host:
 
-The newly issued public certificate is mounted read-only at `/etc/nginx/domain-tls`. The existing IP certificate remains under `/etc/nginx/tls`; Nginx selects by SNI. The `APP_URL` setting points to the hostname, but host-only Secure session cookies continue to work independently for IP and hostname; sign in again at the new URL.
+    cd ~/cross-domain-email-client
+    git pull --ff-only origin main
+    bash scripts/verify-domain-https.sh
+    sudo docker compose ps
 
-No public port 80, alternate port, proxy service, tunnel, database migration, or additional EC2 server is required. TCP/443 is already allowed. New domain certificate renewal checks run twice daily. Unlike the short-lived IP certificate, the domain certificate follows Let's Encrypt's normal expiration policy; the script renews when within 30 days of expiry.
+The script verifies:
+1. The **trusted** certificate and SNI hostname through Caddy at 127.0.0.1:443 (no bypass of certificate checks).
+2. GET /api/status responds ready with PostgreSQL connected.
+3. Anonymous /api/mailboxes returns HTTP **401**.
+4. The mail container is bound to **loopback-only** 127.0.0.1:8080 and serves /healthz.
 
-## 3. Verify
+It does **not** test https://52.14.33.209: direct-IP HTTPS was intentionally retired. The legacy verify-ip-https.sh exits with a clear deprecation message. Previous Docker/lego TLS renewal scripts are safe no-ops; **Caddy handles public certificate renewal**. Do not issue a second certificate by stopping the mail web container.
 
-- Visit `https://mail.madenorth.dev` from a separate device; the URL must be trusted and show the Mail app.
-- `bash scripts/verify-domain-https.sh` verifies both the new certificate and the original IP endpoint without `curl -k`.
-- `systemctl list-timers 'cdec-*-https-renew.timer'` shows certificate checks.
-- `sudo journalctl -u cdec-domain-https-renew.service -n 40 --no-pager` provides renewal status.
-- `openssl x509 -in runtime/domain-https/tls/fullchain.pem -noout -dates -ext subjectAltName` shows the new certificate details (public cert only).
+## Mailbox rollout
 
-If DNS has not propagated, `renew-domain-https.sh` stops *before* touching the live web container and explains the mismatch. Do not rebuild/recreate `web` until domain certificate issuance succeeds or the new SNI configuration will not start. Existing IP certificate renewal uses the same lock and remains scheduled separately.
+New cross-brand mailbox records can be provisioned independently of HTTPS and DNS, using php artisan mail:provision-brand-mailboxes --apply. This saves them **inactive and pending**; it does not deliver email until the Cloudflare Worker and per-recipient routing rules are configured and tested.
 
-Both the app's session cookie and CSRF token are same-origin. Do not set `SESSION_DOMAIN=.madenorth.dev` merely for this migration; host-only cookies avoid sharing authentication with unrelated subdomains.
+See [Multi-brand mailbox onboarding](multi-brand-mail-onboarding.md). Existing forwarding for business-critical inboxes must be inspected and preserved.
