@@ -997,3 +997,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .auth-form .password-toggle { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: #64728a; cursor: pointer; }
 .auth-form .password-toggle:hover { background: #eef3fc; color: #234f9a; }
 .auth-form .password-toggle:focus-visible { outline: 2px solid #3266ef; outline-offset: 2px; }
+
+/* Domain-branded login uses the same untouched company SVG as the mail sidebar. */
+.identity.auth-logo { display: block; padding: 0 0 26px; }
+.identity.auth-logo .brand-logo { display: block; width: 246px; max-width: 100%; height: auto; }
