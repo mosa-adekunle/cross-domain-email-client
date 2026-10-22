@@ -47,3 +47,14 @@ export function mailPageUrl(href, page) {
   url.searchParams.delete('message');
   return url.pathname + url.search + url.hash;
 }
+
+export function messagePageRange(pagination, page) {
+  const total = Math.max(0, Number(pagination?.total) || 0);
+  const perPage = Math.max(1, Number(pagination?.per_page) || 50);
+  if (total === 0) return { start: 0, end: 0, total };
+  return {
+    start: Math.min(total, (page - 1) * perPage + 1),
+    end: Math.min(total, page * perPage),
+    total,
+  };
+}
