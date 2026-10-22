@@ -84,7 +84,7 @@ class DomainCatchallTests(unittest.TestCase):
             return "zone-for-" + name
 
         def api(method, path, token):
-            domain = path.rsplit("/", 2)[-2].replace("zone-for-", "")
+            domain = path.split("/")[2].replace("zone-for-", "")
             return {"result": {"name": domain, "enabled": domain != "santasbag.ca",
                                "status": "unconfigured" if domain == "santasbag.ca" else "ready"}}
 
