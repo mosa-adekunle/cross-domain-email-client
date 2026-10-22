@@ -13,7 +13,7 @@ export default {
     const ownedDomains = new Set((env.ALLOWED_DOMAINS || '').split(',').map(normalizeAddress).filter(Boolean));
     const at = recipient.lastIndexOf('@');
     const domain = at > 0 && at === recipient.indexOf('@') && at <= 64 && recipient.length <= 320 &&
-      !/[\\s<>]/.test(recipient) ? recipient.slice(at + 1) : '';
+      !/[\s<>]/.test(recipient) ? recipient.slice(at + 1) : '';
     const ownedRecipient = Boolean(domain) && ownedDomains.has(domain);
     const forwardRecipients = new Set((env.LEGACY_FORWARD_RECIPIENTS || '').split(',').map(normalizeAddress).filter(Boolean));
     const forwardAddress = normalizeAddress(env.LEGACY_FORWARD_DESTINATION);
