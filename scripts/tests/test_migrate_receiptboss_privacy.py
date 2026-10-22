@@ -51,7 +51,7 @@ class PrivacyRolloutTests(unittest.TestCase):
             m.rule_for([r], m.TARGET)
         r["source"] = "api"
         r["matchers"] = [{"type": "all"}]
-        with self.assertRaisesRegex(RuntimeError, "unexpected match"):
+        with self.assertRaisesRegex(RuntimeError, "exactly one enabled rule"):
             m.rule_for([r], m.TARGET)
 
     def test_exact_gmail_forwarding_only(self):
