@@ -34,9 +34,8 @@ function Login({ onLogin, busy, error }) {
   return (
     <div className="auth-layout">
       <section className="auth-card" aria-label="Administrator sign in">
-        <div className="identity auth-brand">
-          <div className="brand-icon">✉</div>
-          <div><div className="brand-name">Cross Domain</div><div className="brand-subtitle">Email client</div></div>
+        <div className="identity auth-brand auth-logo">
+          <img className="brand-logo" src="/made-north-technologies-logo.svg" alt="Made North Technologies" width="2048" height="682" />
         </div>
         <p className="eyebrow">PRIVATE WORKSPACE</p>
         <h1>Administrator sign in</h1>
@@ -72,7 +71,7 @@ function Login({ onLogin, busy, error }) {
           {error && <div role="alert" className="auth-error">{error}</div>}
           <button type="submit" className="primary-button" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         </form>
-        <p className="auth-footer">Sign in securely using the server HTTPS address.</p>
+        <p className="auth-footer">Sign in securely to Made North Technologies Mail.</p>
       </section>
     </div>
   );
