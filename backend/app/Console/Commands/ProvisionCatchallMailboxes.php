@@ -8,7 +8,7 @@ use Throwable;
 
 class ProvisionCatchallMailboxes extends Command
 {
-    protected $signature = 'mail:provision-catchalls {--apply : Add missing domain inboxes (default is preview)}';
+    protected $signature = 'mail:provision-catchalls {--apply : Add missing domain inboxes (default is preview)} {--domain= : Limit provisioning to one approved root domain}';
     protected $description = 'Create one pending catch-all inbox for each approved owned domain';
 
     public function handle(): int
@@ -20,6 +20,17 @@ class ProvisionCatchallMailboxes extends Command
         ]) {
             $this->error('Unexpected catch-all domain inventory.');
             return self::FAILURE;
+        }
+
+        // An individual domain can be prepared without touching the other four.
+        // The default without --domain remains the existing five-domain behavior.
+        $selected = strtolower(trim((string) $this->option('domain')));
+        if ($selected !== '' && ! in_array($selected, $domains, true)) {
+            $this->error('The selected domain is not in the approved catch-all inventory.');
+            return self::FAILURE;
+        }
+        if ($selected !== '') {
+            $domains = [$selected];
         }
 
         $apply = (bool) $this->option('apply');
