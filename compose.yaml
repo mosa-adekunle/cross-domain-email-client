@@ -72,7 +72,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:80"
-      - "0.0.0.0:443:443"
     depends_on:
       - api
     volumes:
