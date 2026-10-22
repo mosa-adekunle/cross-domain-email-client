@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // Load the PDF parser only when someone actually opens a PDF preview.
 const PdfAttachmentPreview = React.lazy(() => import('./PdfAttachmentPreview.jsx'));
 
-export default function MessageReader({ messageId, csrf, onBack, onExpired, onReply, onRead, onAction }) {
+export default function MessageReader({ messageId, csrf, onBack, onExpired, onReply, onRead, onLoaded, onAction }) {
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -132,6 +132,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
         const payload = await response.json();
         if (!active) return;
         setMessage(payload.message);
+        onLoaded?.(payload.message);
         setLoading(false);
         if (!payload.message.is_read) {
           const update = await fetch('/api/messages/' + messageId + '/read', {
@@ -151,7 +152,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
     }
     load();
     return () => { active = false; };
-  }, [messageId, csrf, onExpired, onRead]);
+  }, [messageId, csrf, onExpired, onRead, onLoaded]);
 
   async function moveMessage(action) {
     if (!message || actionBusy) return;
@@ -196,7 +197,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
             {message.cc && <div><dt>Cc</dt><dd>{message.cc}</dd></div>}
             {message.bcc && message.direction !== 'incoming' && <div><dt>Bcc</dt><dd>{message.bcc}</dd></div>}
             {message.delivery_status && <div><dt>Delivery</dt><dd>{message.delivery_status === 'accepted' ? 'Accepted by outbound provider' : message.delivery_status}</dd></div>}
-            <div><dt>Mailbox</dt><dd>{message.mailbox_address}</dd></div>
+            <div className="message-header-mailbox"><dt>Mailbox</dt><dd>{message.mailbox_address}</dd></div>
           </dl>
           <div className="message-body">
 
