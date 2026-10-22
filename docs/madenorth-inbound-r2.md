@@ -42,7 +42,21 @@ The script expects a private Cloudflare API token from `~/.config/cdec/cloudflar
 
 ### If the script reports NOT READY
 
-Open **Cloudflare Dashboard -> madenorth.dev -> Email -> Email Routing**. Enable Email Routing and apply the **Cloudflare-provided MX / TXT records** for the root domain, after inspecting existing MX, SPF, DKIM, and related mail-provider records. Do not blindly replace a provider's existing MX records or duplicate a domain SPF TXT record. The web and app hostnames (`madenorth.dev`, `mail.madenorth.dev`) are unrelated to MX reception and must remain untouched.
+First run the domain-scoped, **read-only DNS preflight** (never the all-five-domains command):
+
+```bash
+python3 scripts/activate-owned-email-routing.py --domain madenorth.dev
+```
+
+If it says `madenorth.dev: activate`, the selected zone has no conflicting root MX/SPF records according to Cloudflare's API. You can explicitly activate **only that domain** with:
+
+```bash
+python3 scripts/activate-owned-email-routing.py --domain madenorth.dev --apply
+```
+
+This deploys and verifies the existing Worker before enabling Cloudflare-managed root MX/SPF, rechecks for DNS conflicts before writing, and refuses to edit DNS for any other domain. **Only run `--apply` after reviewing the preview**. If existing MX/SPF records are detected, the script refuses the change: inspect them instead of deleting them.
+
+Alternatively, open **Cloudflare Dashboard -> madenorth.dev -> Compute -> Email Service -> Email Routing** and use Cloudflare's guided onboarding. Review the Cloudflare-provided MX/TXT records and any existing provider, SPF, DKIM and DMARC configuration; do not duplicate SPF or replace working third-party MX without a mail transition plan.
 
 Repeat `--status` until it reports `madenorth.dev: READY`. The R2 **Objects** tab is storage only; the bucket itself does not configure domain delivery.
 
