@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import MessageReader from './MessageReader.jsx';
 import ComposeMail from './ComposeMail.jsx';
-import { readMailLocation, mailLocationUrl, mailPageUrl } from './mailLocation.js';
+import { readMailLocation, mailLocationUrl, mailPageUrl, messagePageRange } from './mailLocation.js';
 
 const folders = [
   { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
@@ -187,10 +187,7 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, page, onPage
   const folderTitle = folders.find((item) => item.folder === folder)?.title || 'Messages';
   const visibleIds = messages.map((m) => Number(m.id));
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
-  const totalMessages = Number(pagination.total) || 0;
-  const pageSize = Number(pagination.per_page) || 50;
-  const rangeStart = totalMessages ? ((page - 1) * pageSize + 1) : 0;
-  const rangeEnd = totalMessages ? Math.min(page * pageSize, totalMessages) : 0;
+  const { start: rangeStart, end: rangeEnd, total: totalMessages } = messagePageRange(pagination, page);
 
   useEffect(() => { setSelectedIds([]); setNotice(''); }, [folder, selectedMailbox, query]);
   useEffect(() => { setSelectedIds([]); }, [page]);
@@ -280,7 +277,7 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, page, onPage
           <nav className="mail-pager" aria-label="Message pages">
             <span className="mail-pager-range" aria-live="polite">{loading ? 'Loading…' : `${rangeStart.toLocaleString()}–${rangeEnd.toLocaleString()} of ${totalMessages.toLocaleString()}`}</span>
             <button type="button" className="mail-icon-button mail-pager-arrow" title="Newer messages" aria-label="Previous page of messages" disabled={loading || busy || page <= 1} onClick={() => onPageChange(page - 1)}><MailIcon name="chevron-left" size={19} /></button>
-            <button type="button" className="mail-icon-button mail-pager-arrow" title="Older messages" aria-label="Next page of messages" disabled={loading || busy || page >= pagination.last_page} onClick={() => onPageChange(page + 1)}><MailIcon name="chevron-right" size={19} /></button>
+            <button type="button" className="mail-icon-button mail-pager-arrow" title="Older messages" aria-label="Next page of messages" disabled={loading || busy || page >= pagination.last_page || page >= 10000} onClick={() => onPageChange(page + 1)}><MailIcon name="chevron-right" size={19} /></button>
           </nav>
         </div>
       </div>
