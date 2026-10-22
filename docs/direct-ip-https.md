@@ -1,5 +1,8 @@
 # Direct HTTPS on the EC2 Elastic IP
 
+> **Retired (October 2026):** Direct-IP HTTPS is no longer hosted by the email application's Nginx container. The shared Made North Caddy gateway terminates HTTPS for `mail.madenorth.dev`. This document is historical only. Do not run the old IP certificate issuance/renewal steps. Use [current Caddy hostname verification](mail-madenorth-domain.md) instead.
+
+
 Open **https://52.14.33.209** without a domain, Cloudflare Tunnel or public HTTP/80. HTTPS terminates at the existing Nginx web container; the database remains private. Administrator authentication and CSRF protection remain enabled.
 
 ## Infrastructure
