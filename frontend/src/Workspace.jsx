@@ -318,7 +318,7 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, page, onPage
                   <label className="mail-row-select" title="Select message"><input type="checkbox" checked={selectedIds.includes(id)} disabled={busy} onChange={(event) => toggleSelected(id, event.target.checked)} aria-label={'Select message: ' + (message.subject || '(no subject)')} /></label>
                   <button type="button" className={'mail-star-button ' + (message.is_starred ? 'is-starred' : '')} title={message.is_starred ? 'Remove star' : 'Star message'} aria-label={message.is_starred ? 'Remove star' : 'Star message'} disabled={busy} onClick={() => doAction(message.is_starred ? 'unstar' : 'star', [id])}>{message.is_starred ? '★' : '☆'}</button>
                   <button type="button" className="message-open" onClick={() => folder === 'drafts' ? onOpenDraft(message.id) : onOpenMessage(message.id)} title={message.subject || '(no subject)'}>
-                    <MailContact name={contactName} email={contactEmail} mailbox={message.mailbox_address} otherRecipients={otherRecipients} messageId={message.id} />
+                    <MailContact name={contactName} email={contactEmail} mailbox={message.mailbox_address?.startsWith('catchall@') ? (message.to_recipients || message.mailbox_address) : message.mailbox_address} otherRecipients={otherRecipients} messageId={message.id} />
                     <span className="message-summary"><strong>{message.subject || '(no subject)'}</strong><span className="message-preview">{snippet ? ' — ' + snippet : ''}</span></span>
                     <time>{formatMessageDate(message.received_at || message.sent_at || message.created_at)}</time>
                   </button>
