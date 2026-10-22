@@ -134,5 +134,73 @@ class ActivateEmailRoutingTests(unittest.TestCase):
         worker.assert_called_once_with("redacted")
         self.assertEqual(writes, ["/zones/made-zone/email/routing/dns"])
 
+    def test_public_dns_fallback_on_specific_cloudflare_403(self):
+        from io import BytesIO
+        import json
+        answers = {"Status": 0, "TC": False, "Answer": [
+            {"type": 15, "name": "santasbag.ca.", "data": "10 existing.mail.example."}
+        ]}
+        calls = []
+        def blocked(method, path, token):
+            raise RuntimeError("Cloudflare API GET /zones/abcd/dns_records failed (HTTP 403, Cloudflare code 10000).")
+        def public(req, timeout=12):
+            calls.append(req.full_url)
+            return BytesIO(json.dumps(answers).encode())
+        with patch.object(m.catchalls.deploy, "api", side_effect=blocked), \
+             patch.object(m, "urlopen", side_effect=public):
+            result = m.list_apex_records("redacted", "abcd", "santasbag.ca", "MX")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(result[0]["type"], "MX")
+        self.assertIn("existing.mail.example", result[0]["content"])
+
+    def test_independent_resolvers_agree_when_apex_has_no_mx_or_spf(self):
+        from io import BytesIO
+        import json
+        def public(req, timeout=12):
+            return BytesIO(json.dumps({"Status": 0, "Answer": []}).encode())
+        with patch.object(m, "urlopen", side_effect=public):
+            self.assertEqual(m.public_apex_records("santasbag.ca", "MX"), [])
+            self.assertEqual(m.public_apex_records("santasbag.ca", "TXT"), [])
+
+    def test_disagreement_between_public_resolvers_stops_cutover(self):
+        from io import BytesIO
+        import json
+        responses = iter([
+            {"Status": 0, "Answer": []},
+            {"Status": 0, "Answer": [
+                {"type": 15, "name": "santasbag.ca.", "data": "10 existing.mail.example."}]},
+        ])
+        with patch.object(m, "urlopen", side_effect=lambda *a, **kw: BytesIO(json.dumps(next(responses)).encode())):
+            with self.assertRaisesRegex(RuntimeError, "resolvers disagree"):
+                m.public_apex_records("santasbag.ca", "MX")
+
+    def test_public_resolver_dns_failure_stops_activation(self):
+        from io import BytesIO
+        import json
+        with patch.object(m, "urlopen", return_value=BytesIO(json.dumps({"Status": 3}).encode())):
+            with self.assertRaisesRegex(RuntimeError, "complete successful"):
+                m.public_apex_records("santasbag.ca", "MX")
+
+    def test_public_spf_records_are_detected_as_existing_conflicts(self):
+        from io import BytesIO
+        import json
+        def public(req, timeout=12):
+            return BytesIO(json.dumps({"Status": 0, "Answer": [
+                {"type": 16, "name": "madenorth.dev.",
+                 "data": '\\"v=spf1 include:some.sender.example ~all\\"'}
+            ]}).encode())
+        with patch.object(m, "urlopen", side_effect=public):
+            records = m.public_apex_records("madenorth.dev", "TXT")
+        self.assertRegex(records[0]["content"], "v=spf1")
+
+    def test_other_api_failures_must_not_use_public_fallback(self):
+        def blocked(method, path, token):
+            raise RuntimeError("Cloudflare API GET /zones/abcd/dns_records failed (HTTP 401).")
+        with patch.object(m.catchalls.deploy, "api", side_effect=blocked), \
+             patch.object(m, "public_apex_records") as fallback:
+            with self.assertRaisesRegex(RuntimeError, "HTTP 401"):
+                m.list_apex_records("redacted", "abcd", "santasbag.ca", "MX")
+        fallback.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()
