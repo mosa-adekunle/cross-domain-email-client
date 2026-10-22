@@ -8,7 +8,7 @@ A self-hosted, cost-conscious email dashboard for sending, receiving, and managi
 
 ## Browser URL
 
-The authenticated app can be reached at **https://mail.madenorth.dev** once the DNS-only A record and trusted hostname certificate are deployed. The original `https://52.14.33.209` direct-IP endpoint continues to work with its independent certificate. See [domain HTTPS deployment](docs/mail-madenorth-domain.md). The GitHub project remains **Cross Domain Email Client**.
+The authenticated app is served at **https://mail.madenorth.dev** through the shared Made North Caddy HTTPS gateway, with the mail Nginx upstream bound to `127.0.0.1:8080`. **Direct-IP HTTPS has been retired.** See [current domain HTTPS verification](docs/mail-madenorth-domain.md). The GitHub project remains **Cross Domain Email Client**.
 
 ## Overview
 
