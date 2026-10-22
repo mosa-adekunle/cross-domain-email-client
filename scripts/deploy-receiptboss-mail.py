@@ -79,7 +79,29 @@ def api(method, url_path, token, payload=None):
         with urlopen(Request(url, data=body, headers=headers, method=method), timeout=20) as response:
             data = json.load(response)
     except HTTPError as exc:
-        raise RuntimeError(f"Cloudflare API {method} failed (HTTP {exc.code}); verify token permissions and Cloudflare zone.") from None
+        # Path and Cloudflare numeric error codes are safe diagnostics. Never
+        # print HTTP headers, token values or untrusted API error descriptions.
+        try:
+            failure = json.loads(exc.read(16384))
+            codes = ", ".join(str(item.get("code")) for item in failure.get("errors", [])
+                              if isinstance(item, dict) and isinstance(item.get("code"), int))
+        except (ValueError, OSError, AttributeError, TypeError):
+            codes = ""
+        target = url_path.split("?", 1)[0]
+        hint = (
+            "Zone → Zone Read permission for the selected domains."
+            if target == "/zones" else
+            "Zone → Zone Settings Read permission for this domain."
+            if target.endswith("/email/routing") else
+            "Zone → Email Routing Rules Read/Edit permission for this domain."
+            if "/email/routing/rules" in target else
+            "Account Workers permission or zone-scoped permissions."
+        )
+        raise RuntimeError(
+            f"Cloudflare API {method} {target} failed (HTTP {exc.code}" +
+            (f", Cloudflare code {codes}" if codes else "") +
+            f"). Check {hint} No routing changed by this failed API call."
+        ) from None
     except (URLError, TimeoutError):
         raise RuntimeError("Cloudflare API connection failed; no existing routing rules were modified.") from None
     if not isinstance(data, dict) or not data.get("success", False):
