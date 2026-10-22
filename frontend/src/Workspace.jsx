@@ -275,13 +275,14 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, csrf, onExpi
           <>
             <span className="mail-selection-count">{selectedIds.length} selected</span>
             {folder === 'inbox' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('archive', selectedIds)}><MailIcon name="archive" size={17} />Archive</button>}
+            {folder === 'archive' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('unarchive', selectedIds)}><MailIcon name="inbox" size={17} />Move to Inbox</button>}
             {folder !== 'trash' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('trash', selectedIds)}><MailIcon name="trash" size={17} />Delete</button>}
             {folder === 'trash' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('restore', selectedIds)}><MailIcon name="restore" size={17} />Restore</button>}
             <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('read', selectedIds)}><MailIcon name="mailopen" size={17} />Mark read</button>
             <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('unread', selectedIds)}><MailIcon name="mail" size={17} />Mark unread</button>
             <button className="mail-toolbar-action clear-selection" type="button" disabled={busy} onClick={() => setSelectedIds([])}>Clear</button>
           </>
-        ) : <span className="mail-action-hint">{folder === 'trash' ? 'Deleted messages can be restored' : 'Select messages for bulk actions'}</span>}
+        ) : <span className="mail-action-hint">{folder === 'trash' ? 'Deleted messages can be restored' : folder === 'archive' ? 'Select messages to move back to Inbox' : 'Select messages for bulk actions'}</span>}
       </div>
       {notice && <div className="mail-inline-notice" role="status">{notice}</div>}
       {error && <div className="mail-error"><div className="form-alert error" role="alert">{error}</div><button type="button" className="compose-secondary" onClick={() => setRefreshKey((value) => value + 1)}>Try again</button></div>}
