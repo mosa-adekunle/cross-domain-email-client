@@ -65,6 +65,24 @@ npx wrangler deploy
 
 These commands publish the Worker code and allowlist; they do **not** create Email Routing rules. Preserve and test the existing ReceiptBoss `support`, `legal`, and `privacy` forwarding arrangements before changing the respective Cloudflare actions. Adding a Worker action can replace existing forwarding behavior if you edit an active rule.
 
+### One-command ReceiptBoss sales/hello activation
+
+Once the eleven database records are provisioned and the Cloudflare secret `LEGACY_FORWARD_DESTINATION` is present, deploy the Worker and safely activate **only** `sales@receiptboss.ca` and `hello@receiptboss.ca` from the existing Ubuntu EC2 host:
+
+```bash
+cd ~/cross-domain-email-client
+git pull --ff-only origin main
+python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+python3 scripts/deploy-receiptboss-mail.py
+python3 scripts/deploy-receiptboss-mail.py --apply
+```
+
+This is a single-script, idempotent deployment using Dockerized Node/Wrangler. Preview lists what would change; `--apply` first deploys the Worker, then creates only the missing address-specific rules. It requires a Cloudflare API token authorized for **Workers Editor** (existing Worker), **Email Routing Rules Read/Write** (ReceiptBoss zone). A general Cloudflare R2 S3 key is **not** a Worker deployment token. The script looks for `CLOUDFLARE_API_TOKEN` in the shell, the project `.env`, then the private owner-only file `~/.config/cdec/cloudflare-worker-token`. If none exists, it prompts once without echo and saves the token with permissions `0600` for future deployments; never paste a token into chat or a GitHub commit.
+
+Safety gates: verify the current source Worker name/allowlist/R2 binding, inspect Cloudflare's actual routing rules, require an active `inbox-test@receiptboss.ca → cdec-inbound-archive` pilot, refuse duplicates or conflicts, and recheck rules immediately before creation. The script **never modifies** the existing support/legal/privacy forward routes, MX records, website, or direct-host HTTPS gateway. A successful API rule creation must be confirmed by a second inventory check. Stop if any guard fails.
+
+Afterward, send an external test email to each address and confirm an R2 original plus correct imported inbox view in `https://mail.madenorth.dev`. Nothing is considered live/tested until both checks succeed. Legal/privacy dual-delivery migration is a later separate task.
+
 ### ReceiptBoss routing audit and dual delivery (2026-10-22)
 
 Verified from the Cloudflare Email Routing screenshot:
