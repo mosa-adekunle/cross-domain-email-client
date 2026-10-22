@@ -63,17 +63,14 @@ if [[ -n "$WEB_ID" && "$(docker inspect -f '{{.State.Running}}' "$WEB_ID")" == '
     STOPPED=1
 fi
 
-ACTION=run
-if [[ -s "$ACME/certificates/$DOMAIN.crt" && -s "$ACME/certificates/$DOMAIN.key" ]]; then
-    ACTION=renew
-fi
-
+# lego v5 removed the 'renew' command and moved CLI flags after 'run'.
+# The same 'run' command issues a new certificate or renews the existing one.
 docker run --rm --network host \
     -v "$ACME:/data" \
-    "$IMAGE" --server letsencrypt --accept-tos \
+    "$IMAGE" run \
+    --server letsencrypt --accept-tos \
     --email "$(cat "$EMAIL_FILE")" \
-    --domains "$DOMAIN" --tls --path /data \
-    "$ACTION"
+    --domains "$DOMAIN" --tls --path /data
 
 SOURCE_CERT="$ACME/certificates/$DOMAIN.crt"
 SOURCE_KEY="$ACME/certificates/$DOMAIN.key"
