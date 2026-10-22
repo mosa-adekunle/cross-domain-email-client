@@ -6,8 +6,10 @@ DOMAIN='mail.madenorth.dev'
 IP='52.14.33.209'
 TLS='runtime/domain-https/tls/fullchain.pem'
 
-[[ -s "$TLS" ]] || { echo 'Domain HTTPS certificate has not been issued.' >&2; exit 1; }
-openssl x509 -in "$TLS" -noout -ext subjectAltName | grep -Fq "DNS:$DOMAIN" || {
+# The ACME directory is root-only (0700). Read the public certificate
+# through sudo without weakening the directory or private-key permissions.
+sudo test -s "$TLS" || { echo 'Domain HTTPS certificate has not been issued.' >&2; exit 1; }
+sudo openssl x509 -in "$TLS" -noout -ext subjectAltName | grep -Fq "DNS:$DOMAIN" || {
     echo 'The domain certificate does not include the mail hostname.' >&2
     exit 1
 }
