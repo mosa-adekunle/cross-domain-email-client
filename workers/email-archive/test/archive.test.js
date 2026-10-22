@@ -190,3 +190,51 @@ test('does not attempt forwarding when archiving fails', async () => {
     console.error = saved;
   }
 });
+
+test('accepts new local parts at every approved domain and archives the true envelope recipient', async () => {
+  const domains = ['receiptboss.ca', 'santasbag.ca', 'madenorth.dev', 'madekunle.com', 'delishearsentertainment.com'];
+  for (const domain of domains) {
+    const recipient = 'Unexpected+Alias@' + domain.toUpperCase();
+    const message = createMessage(recipient);
+    let metadata;
+    await worker.email(message, {
+      ALLOWED_DOMAINS: domains.join(','),
+      MAIL_ARCHIVE: {
+        async put(_key, _stream, options) {
+          metadata = options.customMetadata;
+          return { key: 'stored' };
+        },
+      },
+    });
+    assert.equal(message.rejected, null);
+    assert.equal(metadata.recipient, 'unexpected+alias@' + domain);
+  }
+});
+
+test('does not accept unknown recipients outside exact owned domain list', async () => {
+  for (const recipient of [
+    'info@unowned.example', 'mail@fake-receiptboss.ca',
+    'mail@sub.madenorth.dev', 'mail@madenorth.dev.attacker.test',
+    'missing-at', 'a@@receiptboss.ca', 'space address@receiptboss.ca',
+  ]) {
+    const message = createMessage(recipient);
+    await worker.email(message, {
+      ALLOWED_DOMAINS: 'receiptboss.ca,santasbag.ca,madenorth.dev,madekunle.com,delishearsentertainment.com',
+      MAIL_ARCHIVE: { put() { throw new Error('Unauthorized recipient must not be stored'); } },
+    });
+    assert.match(message.rejected || '', /not configured/, recipient);
+  }
+});
+
+test('catch-all messages do not accidentally inherit Gmail forwarding', async () => {
+  const message = createMessage('other@receiptboss.ca');
+  let forwarded = false;
+  message.forward = async () => { forwarded = true; };
+  await worker.email(message, {
+    ALLOWED_DOMAINS: 'receiptboss.ca',
+    LEGACY_FORWARD_RECIPIENTS: 'privacy@receiptboss.ca,legal@receiptboss.ca',
+    LEGACY_FORWARD_DESTINATION: 'verified@example.net',
+    MAIL_ARCHIVE: { async put() { return { key: 'stored' }; } },
+  });
+  assert.equal(forwarded, false);
+});
