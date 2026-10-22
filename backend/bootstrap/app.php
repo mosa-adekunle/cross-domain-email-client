@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         App\Console\Commands\CreateAdmin::class,
         App\Console\Commands\ResetAdminPassword::class,
         App\Console\Commands\SyncR2Mail::class,
+        App\Console\Commands\ProvisionBrandMailboxes::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // Browser-based authentication uses database sessions and CSRF checks.
