@@ -117,3 +117,76 @@ test('uses sortable timestamp keys for the checkpointed importer', async () => {
   });
   assert.match(key, /^incoming\/v2\/\d{4}\/\d{2}\/\d{2}\/\d{17}-[0-9a-f-]+\.eml$/);
 });
+
+test('archives and then forwards legal mail to the verified legacy destination', async () => {
+  const events = [];
+  const message = createMessage('LEGAL@receiptboss.ca');
+  message.forward = async (destination) => {
+    events.push('forward:' + destination);
+  };
+  await worker.email(message, {
+    ALLOWED_RECIPIENTS: 'legal@receiptboss.ca',
+    LEGACY_FORWARD_RECIPIENTS: 'legal@receiptboss.ca,privacy@receiptboss.ca',
+    LEGACY_FORWARD_DESTINATION: 'verified@example.net',
+    MAIL_ARCHIVE: {
+      async put() { events.push('archive'); return { key: 'archived' }; },
+    },
+  });
+  assert.deepEqual(events, ['archive', 'forward:verified@example.net']);
+});
+
+test('does not forward new addresses or the existing test mailbox', async () => {
+  for (const recipient of ['sales@receiptboss.ca', 'inbox-test@receiptboss.ca']) {
+    const message = createMessage(recipient);
+    let forwarded = false;
+    message.forward = async () => { forwarded = true; };
+    await worker.email(message, {
+      ALLOWED_RECIPIENTS: recipient,
+      LEGACY_FORWARD_RECIPIENTS: 'legal@receiptboss.ca,privacy@receiptboss.ca',
+      MAIL_ARCHIVE: { async put() { return { key: 'archived' }; } },
+    });
+    assert.equal(forwarded, false);
+  }
+});
+
+test('fails closed for legacy forwarding when destination is missing', async () => {
+  const message = createMessage('privacy@receiptboss.ca');
+  message.forward = async () => { throw Error('Should not forward'); };
+  await assert.rejects(worker.email(message, {
+    ALLOWED_RECIPIENTS: 'privacy@receiptboss.ca',
+    LEGACY_FORWARD_RECIPIENTS: 'privacy@receiptboss.ca',
+    MAIL_ARCHIVE: { async put() { throw Error('Should not archive'); } },
+  }), /Verified legacy forwarding destination is not configured/);
+});
+
+test('propagates forwarding failures after archiving without reporting success', async () => {
+  const message = createMessage('legal@receiptboss.ca');
+  message.forward = async () => { throw new Error('Forward rejected by provider'); };
+  let archived = false;
+  await assert.rejects(worker.email(message, {
+    ALLOWED_RECIPIENTS: 'legal@receiptboss.ca',
+    LEGACY_FORWARD_RECIPIENTS: 'legal@receiptboss.ca',
+    LEGACY_FORWARD_DESTINATION: 'verified@example.net',
+    MAIL_ARCHIVE: { async put() { archived = true; return { key: 'archived' }; } },
+  }), /Forward rejected by provider/);
+  assert.equal(archived, true);
+});
+
+test('does not attempt forwarding when archiving fails', async () => {
+  const message = createMessage('legal@receiptboss.ca');
+  let attempted = false;
+  message.forward = async () => { attempted = true; };
+  const saved = console.error;
+  console.error = () => {};
+  try {
+    await assert.rejects(worker.email(message, {
+      ALLOWED_RECIPIENTS: 'legal@receiptboss.ca',
+      LEGACY_FORWARD_RECIPIENTS: 'legal@receiptboss.ca',
+      LEGACY_FORWARD_DESTINATION: 'verified@example.net',
+      MAIL_ARCHIVE: { async put() { throw new Error('R2 unavailable'); } },
+    }), /R2 unavailable/);
+    assert.equal(attempted, false);
+  } finally {
+    console.error = saved;
+  }
+});
