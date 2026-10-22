@@ -18,4 +18,6 @@ test('only explicitly approved recipients plus the existing pilot can be archive
   assert.ok(recipients.every((address) => !address.includes('*') && address === address.toLowerCase()));
   assert.equal(worker.r2_buckets[0].bucket_name, 'cdec-inbound-mail');
   assert.equal(worker.r2_buckets[0].binding, 'MAIL_ARCHIVE');
+  assert.equal(worker.vars.LEGACY_FORWARD_RECIPIENTS, 'legal@receiptboss.ca,privacy@receiptboss.ca');
+  assert.ok(!Object.hasOwn(worker.vars, 'LEGACY_FORWARD_DESTINATION'), 'Gmail destination must never be committed');
 });
