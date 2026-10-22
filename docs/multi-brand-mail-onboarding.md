@@ -12,6 +12,49 @@ The app is already capable of storing multiple mail domains, mailboxes and viewi
 
 Resend receiving stays disabled for all three. A verified sending domain alone does **not** create or host receiving mailboxes.
 
+## Domain-wide inbound routing (updated requirement, 2026-10-22)
+
+**Goal: All future incoming email addressed to any local part at any of the owner's five root domains must reach Cross Domain Email Client—not just eleven named addresses.**
+
+Approved root domains: `receiptboss.ca`, `santasbag.ca`, `madenorth.dev`, `madekunle.com`, `delishearsentertainment.com`.
+
+The Worker `ALLOWED_DOMAINS` explicitly allows those five and rejects outsiders. Incoming MIME is saved to the existing private R2 bucket with the original envelope recipient. Laravel first resolves an exact `mailboxes.address`, then falls back to `catchall@<owned-domain>` without losing the true envelope address in `mail_recipients`. No automatic creation of unlimited individual mailbox rows.
+
+### EC2: provision the five domain catch-all inboxes
+
+```bash
+cd ~/cross-domain-email-client
+git pull --ff-only origin main
+sudo docker compose build api web
+sudo docker compose run --rm --no-deps api php tests/catchall-domains-smoke.php
+sudo docker compose up -d --no-deps --force-recreate api web
+sudo docker compose exec -T api php artisan mail:provision-catchalls
+sudo docker compose exec -T api php artisan mail:provision-catchalls --apply
+bash scripts/verify-domain-https.sh
+```
+
+This creates up to five missing domain records and five `catchall@<domain>` mailboxes. No existing domain or explicitly configured mailbox is modified. The catch-all mailboxes are **pending and cannot send**, but new incoming mail can be archived and displayed when routed.
+
+### Cloudflare: inspect all five domains before switching DNS or routing
+
+The new `scripts/configure-domain-catchalls.py` uses the existing private Cloudflare deployer token from `~/.config/cdec/cloudflare-worker-token` and has two modes:
+
+```bash
+cd ~/cross-domain-email-client
+python3 scripts/configure-domain-catchalls.py          # read-only preview across 5 zones
+python3 scripts/configure-domain-catchalls.py --apply  # only after preview is clean
+```
+
+The script resolves all five Cloudflare zone IDs, requires Email Routing to be **ready** (Cloudflare is already the receiving MX), inventories exact-address routing rules, preserves the existing catch-all rule privately, deploys/tests the updated Worker, and changes **only disabled/drop catch-all rules** to Send-to-Worker. It will **refuse** to override active catch-alls pointing elsewhere or any domain with unverified Email Routing/MX configuration. Cloudflare zone listing may require additional `Zone Read` permissions; if the token lacks that permission, the script stops safely.
+
+**Important limitation:** An active specific-address Email Routing rule takes priority over the catch-all. The script prints any existing rules targeting Gmail or another Worker. These must be migrated individually to the new Worker (optionally forwarding the original to the previous verified destination) for the domain to be truly 100% centralized. Do not declare a domain fully cut over while such explicit exceptions remain. The existing ReceiptBoss `support`, `legal`, `privacy` rules are known examples. No old Gmail history/backfill is needed: this concerns **future** incoming email only.
+
+Cloudflare routing is authoritative only when the root-domain MX points to Cloudflare Email Routing. Do not overwrite an existing provider's MX without confirming its current mail delivery setup. No blanket acceptance of subdomains is implied: this plan covers five named root domains, not arbitrary subdomains.
+
+### Catch-all operational caveat
+
+Accepting any local part also accepts typos, unsolicited email, and spam. Archive limits and private storage remain; monitor R2 ingestion and add spam filtering and per-domain quotas as usage grows. Only the five domain owners' approved zones should be allowed; never accept a wildcard internet domain.
+
 ## Approved eleven-address rollout (2026-10-22)
 
 The administrator explicitly approved these addresses:
