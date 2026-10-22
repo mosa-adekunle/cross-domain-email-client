@@ -1,0 +1,9 @@
+[Unit]
+Description=Renew Made North Technologies Mail domain HTTPS certificate
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ubuntu/cross-domain-email-client
+ExecStart=/usr/bin/bash /home/ubuntu/cross-domain-email-client/scripts/renew-domain-https.sh
