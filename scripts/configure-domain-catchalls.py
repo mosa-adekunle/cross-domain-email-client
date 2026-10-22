@@ -46,6 +46,30 @@ def routing_state(token, zone, domain):
     return settings
 
 
+def report_all_domains(token):
+    """Read-only onboarding audit. Reports every domain, even if one is not ready."""
+    ready = 0
+    for domain in DOMAINS:
+        try:
+            zone = zone_id(token, domain)
+            settings = deploy.api("GET", f"/zones/{zone}/email/routing", token).get("result") or {}
+            if settings.get("name") != domain:
+                print(f"{domain}: UNVERIFIED (settings returned unexpected domain)")
+                continue
+            enabled = settings.get("enabled")
+            status = settings.get("status") or "unknown"
+            if enabled is True and status == "ready":
+                ready += 1
+                print(f"{domain}: READY (Email Routing enabled)")
+            else:
+                print(f"{domain}: NOT READY (enabled={enabled!s}, status={status})")
+        except RuntimeError as error:
+            # Do not let one unconfigured domain conceal the state of others.
+            print(f"{domain}: CHECK FAILED ({error})")
+    print(f"Summary: {ready}/{len(DOMAINS)} domains confirmed ready. Read-only: nothing changed.")
+    return ready == len(DOMAINS)
+
+
 def existing_catchall(token, zone):
     rule = deploy.api("GET", f"/zones/{zone}/email/routing/rules/catch_all", token).get("result") or {}
     if rule.get("source", "api") != "api":
@@ -151,10 +175,15 @@ def backup(snapshot):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Deploy Worker and enable safe domain catch-all rules")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--apply", action="store_true", help="Deploy Worker and enable safe domain catch-all rules")
+    modes.add_argument("--status", action="store_true", help="Report Email Routing readiness for all five domains without changes")
     args = parser.parse_args()
     deploy.validate_source()
     token = deploy.credential()
+    if args.status:
+        report_all_domains(token)
+        return
     snapshot = inspect(token)
     intended = plan(snapshot)
     for domain, action in intended.items():
