@@ -52,10 +52,13 @@ The source `wrangler.jsonc` now allows precisely these 11 addresses plus `inbox-
 
 ```bash
 cd workers/email-archive
-npm ci
+# Run on a computer with a browser (not the mail production EC2).
+# This Worker has no committed package-lock.json, so use npm install, not npm ci.
+npm install --no-audit --no-fund
 npm test
-npx wrangler deploy --dry-run
-npx wrangler deploy
+npx wrangler whoami || npx wrangler login
+npx wrangler deploy --dry-run --keep-vars
+npx wrangler deploy --keep-vars
 ```
 
 These commands publish the Worker code and allowlist; they do **not** create Email Routing rules. Preserve and test the existing ReceiptBoss `support`, `legal`, and `privacy` forwarding arrangements before changing the respective Cloudflare actions. Adding a Worker action can replace existing forwarding behavior if you edit an active rule.
