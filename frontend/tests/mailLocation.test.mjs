@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readMailLocation, mailLocationUrl, mailPageUrl } from '../src/mailLocation.js';
+import { readMailLocation, mailLocationUrl, mailPageUrl, messagePageRange } from '../src/mailLocation.js';
 
 test('defaults to Inbox when folder is missing or invalid', () => {
   assert.equal(readMailLocation('?utm_source=chatgpt.com').folder, 'inbox');
@@ -68,4 +68,12 @@ test('invalid and out-of-range pages do not change the first page', () => {
   assert.equal(readMailLocation('?page=10000').page, 10000);
   assert.equal(mailPageUrl('https://mail.madenorth.dev/', 10001), '/');
   assert.equal(mailPageUrl('https://mail.madenorth.dev/?page=7&message=12', 2), '/?page=2');
+});
+
+test('Gmail pagination range handles empty, first, middle and last page', () => {
+  assert.deepEqual(messagePageRange({ total: 0, per_page: 50 }, 1), { start: 0, end: 0, total: 0 });
+  assert.deepEqual(messagePageRange({ total: 125, per_page: 50 }, 1), { start: 1, end: 50, total: 125 });
+  assert.deepEqual(messagePageRange({ total: 125, per_page: 50 }, 2), { start: 51, end: 100, total: 125 });
+  assert.deepEqual(messagePageRange({ total: 125, per_page: 50 }, 3), { start: 101, end: 125, total: 125 });
+  assert.deepEqual(messagePageRange({ total: 11, per_page: 50 }, 1), { start: 1, end: 11, total: 11 });
 });
