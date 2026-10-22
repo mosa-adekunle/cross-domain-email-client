@@ -990,3 +990,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .message-bottom-actions { padding: 19px; }
   .message-view-notice { padding: 10px 19px; }
 }
+
+/* Accessible administrator password visibility control. */
+.auth-form .password-field { position: relative; margin-bottom: 8px; }
+.auth-form .password-field input { margin-bottom: 0; padding-right: 54px; }
+.auth-form .password-toggle { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: #64728a; cursor: pointer; }
+.auth-form .password-toggle:hover { background: #eef3fc; color: #234f9a; }
+.auth-form .password-toggle:focus-visible { outline: 2px solid #3266ef; outline-offset: 2px; }

@@ -24,6 +24,7 @@ async function apiRequest(path, options = {}) {
 function Login({ onLogin, busy, error }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const submit = async (event) => {
     event.preventDefault();
     const ok = await onLogin(email, password);
@@ -44,7 +45,30 @@ function Login({ onLogin, busy, error }) {
           <label htmlFor="login-email">Email address</label>
           <input id="login-email" type="email" value={email} maxLength={320} autoComplete="username" required onChange={(event) => setEmail(event.target.value)} />
           <label htmlFor="login-password">Password</label>
-          <input id="login-password" type="password" value={password} autoComplete="current-password" required onChange={(event) => setPassword(event.target.value)} />
+          <div className="password-field">
+            <input id="login-password" type={showPassword ? 'text' : 'password'} value={password} autoComplete="current-password" required onChange={(event) => setPassword(event.target.value)} />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              aria-controls="login-password"
+              title={showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => setShowPassword((visible) => !visible)}
+            >
+              {showPassword ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                  <path d="M9.9 5.2A10.5 10.5 0 0 1 12 5c5 0 8.6 3.5 10 7a12.7 12.7 0 0 1-3.2 4.5M6.2 6.3A13 13 0 0 0 2 12c1.4 3.5 5 7 10 7 1.5 0 2.8-.3 4.1-.9" />
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
+            </button>
+          </div>
           {error && <div role="alert" className="auth-error">{error}</div>}
           <button type="submit" className="primary-button" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         </form>
