@@ -76,5 +76,46 @@ class DomainCatchallTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "managed by Wrangler"):
                 module.existing_catchall("token", "zone")
 
+    def test_status_audit_reports_all_domains_when_one_is_unconfigured(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+
+        def zone(token, name):
+            return "zone-for-" + name
+
+        def api(method, path, token):
+            domain = path.rsplit("/", 2)[-2].replace("zone-for-", "")
+            return {"result": {"name": domain, "enabled": domain != "santasbag.ca",
+                               "status": "unconfigured" if domain == "santasbag.ca" else "ready"}}
+
+        out = StringIO()
+        with patch.object(module, "zone_id", side_effect=zone), \
+             patch.object(module.deploy, "api", side_effect=api), redirect_stdout(out):
+            all_ready = module.report_all_domains("redacted")
+        self.assertFalse(all_ready)
+        self.assertIn("santasbag.ca: NOT READY (enabled=False, status=unconfigured)", out.getvalue())
+        self.assertIn("delishearsentertainment.com: READY", out.getvalue())
+        self.assertIn("Summary: 4/5 domains confirmed ready.", out.getvalue())
+
+    def test_status_audit_continues_after_per_zone_api_failure(self):
+        from io import StringIO
+        from contextlib import redirect_stdout
+
+        def zone(token, name):
+            if name == "madenorth.dev":
+                raise RuntimeError("Cloudflare rejected zone inspection")
+            return name
+
+        def api(method, path, token):
+            return {"result": {"name": path.split("/")[2], "enabled": True, "status": "ready"}}
+
+        out = StringIO()
+        with patch.object(module, "zone_id", side_effect=zone), \
+             patch.object(module.deploy, "api", side_effect=api), redirect_stdout(out):
+            all_ready = module.report_all_domains("redacted")
+        self.assertFalse(all_ready)
+        self.assertIn("madenorth.dev: CHECK FAILED", out.getvalue())
+        self.assertIn("Summary: 4/5 domains confirmed ready.", out.getvalue())
+
 if __name__ == "__main__":
     unittest.main()
