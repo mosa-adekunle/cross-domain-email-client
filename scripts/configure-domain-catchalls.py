@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -46,10 +47,10 @@ def routing_state(token, zone, domain):
     return settings
 
 
-def report_all_domains(token):
+def report_all_domains(token, domains=DOMAINS):
     """Read-only onboarding audit. Reports every domain, even if one is not ready."""
     ready = 0
-    for domain in DOMAINS:
+    for domain in domains:
         try:
             zone = zone_id(token, domain)
             settings = deploy.api("GET", f"/zones/{zone}/email/routing", token).get("result") or {}
@@ -66,8 +67,8 @@ def report_all_domains(token):
         except RuntimeError as error:
             # Do not let one unconfigured domain conceal the state of others.
             print(f"{domain}: CHECK FAILED ({error})")
-    print(f"Summary: {ready}/{len(DOMAINS)} domains confirmed ready. Read-only: nothing changed.")
-    return ready == len(DOMAINS)
+    print(f"Summary: {ready}/{len(domains)} domains confirmed ready. Read-only: nothing changed.")
+    return ready == len(domains)
 
 
 def existing_catchall(token, zone):
@@ -108,9 +109,9 @@ def target_rule(rule):
     }
 
 
-def inspect(token):
+def inspect(token, domains=DOMAINS):
     snapshot = {}
-    for domain in DOMAINS:
+    for domain in domains:
         zone = zone_id(token, domain)
         routing_state(token, zone, domain)
         catch = existing_catchall(token, zone)
@@ -144,47 +145,61 @@ def verify_live_worker(token):
         raise RuntimeError("Deployed Worker domain list does not match the approved five domains.")
 
 
-def check_local_mailboxes():
-    process = subprocess.run(
-        ["sudo", "docker", "compose", "exec", "-T", "api",
-         "php", "artisan", "mail:provision-catchalls"],
-        cwd=deploy.ROOT, capture_output=True, text=True, check=True,
-    )
-    if "0 catch-all mailbox(es)" not in process.stdout:
-        raise RuntimeError("Provision five catch-all inboxes in PostgreSQL before enabling Cloudflare routing.")
+def check_local_mailboxes(domains=DOMAINS):
+    """Refuse routing unless each selected domain already has its catch-all inbox."""
+    for domain in domains:
+        process = subprocess.run(
+            ["sudo", "docker", "compose", "exec", "-T", "api",
+             "php", "artisan", "mail:provision-catchalls", f"--domain={domain}"],
+            cwd=deploy.ROOT, capture_output=True, text=True, check=True,
+        )
+        if "0 catch-all mailbox(es)" not in process.stdout or "0 domain(s)" not in process.stdout:
+            raise RuntimeError(
+                f"Provision catchall@{domain} in PostgreSQL before enabling Cloudflare routing."
+            )
 
 
 def backup(snapshot):
-    if BACKUP.exists():
-        data = json.loads(BACKUP.read_text())
-        for domain, details in snapshot.items():
-            old = data.get(domain)
-            if not old or old.get("zone_id") != details["zone_id"]:
-                raise RuntimeError("Existing private backup does not cover all zones; refusing to overwrite.")
-        return
+    """Atomically preserve each selected zone's original rule, without erasing others."""
     BACKUP.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(BACKUP.parent, 0o700)
-    fd = os.open(BACKUP, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w") as handle:
-        json.dump({
-            domain: {"zone_id": obj["zone_id"], "catchall": obj["catchall"]}
-            for domain, obj in snapshot.items()
-        }, handle, indent=2)
-    os.chmod(BACKUP, 0o600)
+    saved = json.loads(BACKUP.read_text()) if BACKUP.exists() else {}
+    if not isinstance(saved, dict):
+        raise RuntimeError("Existing catch-all backup format is invalid; stopping.")
+    for domain, details in snapshot.items():
+        old = saved.get(domain)
+        if old is not None and old.get("zone_id") != details["zone_id"]:
+            raise RuntimeError("Saved backup belongs to another Cloudflare zone; stopping.")
+        if old is None:
+            saved[domain] = {"zone_id": details["zone_id"], "catchall": details["catchall"]}
+    fd, temporary = tempfile.mkstemp(prefix=".catchall-backup-", dir=BACKUP.parent)
+    try:
+        os.chmod(temporary, 0o600)
+        with os.fdopen(fd, "w") as handle:
+            json.dump(saved, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, BACKUP)
+        os.chmod(BACKUP, 0o600)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--apply", action="store_true", help="Deploy Worker and enable safe domain catch-all rules")
-    modes.add_argument("--status", action="store_true", help="Report Email Routing readiness for all five domains without changes")
+    modes.add_argument("--status", action="store_true", help="Report Email Routing readiness without changes")
+    parser.add_argument("--domain", choices=DOMAINS, help="Limit audit or activation to one approved domain")
     args = parser.parse_args()
+    domains = (args.domain,) if args.domain else DOMAINS
     deploy.validate_source()
     token = deploy.credential()
     if args.status:
-        report_all_domains(token)
+        report_all_domains(token, domains)
         return
-    snapshot = inspect(token)
+    snapshot = inspect(token, domains)
     intended = plan(snapshot)
     for domain, action in intended.items():
         exceptions = snapshot[domain]["exceptions"]
@@ -195,14 +210,14 @@ def main():
         print("PREVIEW: No Worker, catch-all or specific routing rule changed.")
         return
 
-    check_local_mailboxes()
+    check_local_mailboxes(domains)
     # Before any rules point to a new catch-all, deploy the source with all
     # owned domains; Worker tests and dry-run are run by deploy_worker().
     deploy.deploy_worker(token)
     verify_live_worker(token)
     backup(snapshot)
 
-    for domain in DOMAINS:
+    for domain in domains:
         zone = snapshot[domain]["zone_id"]
         updated = existing_catchall(token, zone)
         action = classify(updated)
@@ -213,7 +228,7 @@ def main():
         if classify(existing_catchall(token, zone)) != "already active":
             raise RuntimeError(f"Catch-all could not be verified for {domain}.")
         print(f"Enabled: *@{domain} -> {deploy.WORKER_NAME}")
-    print("Catch-all rules verified for all five domains.")
+    print("Catch-all rules verified for: " + ", ".join(domains))
     print("IMPORTANT: Existing explicit forwarding rules listed above still bypass the Worker.")
     print("Continue migrating those routes individually while preserving any required forwarding.")
 
