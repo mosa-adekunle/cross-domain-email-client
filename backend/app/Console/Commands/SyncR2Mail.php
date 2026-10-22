@@ -246,6 +246,15 @@ class SyncR2Mail extends Command
         }
         $mailbox = DB::table('mailboxes')->where('address', $recipient)->first();
         if (! $mailbox) {
+            // Accept unknown local parts only for the explicitly owned domains.
+            // Keep the actual envelope recipient for display, search and audit;
+            // do not invent thousands of mailboxes for spam or typos.
+            $domain = strtolower((string) substr(strrchr($recipient, '@') ?: '', 1));
+            if (in_array($domain, config('catchall_domains', []), true)) {
+                $mailbox = DB::table('mailboxes')->where('address', 'catchall@'.$domain)->first();
+            }
+        }
+        if (! $mailbox) {
             throw new \RuntimeException('Archived recipient has no matching mailbox.');
         }
         $raw = (string) $result['Body'];
@@ -269,7 +278,7 @@ class SyncR2Mail extends Command
             $date = now();
         }
 
-        DB::transaction(function () use ($bucket, $key, $identity, $mailbox, $subject, $messageId, $replyToId, $fromAddress, $fromName, $preview, $raw, $date): void {
+        DB::transaction(function () use ($bucket, $key, $identity, $mailbox, $recipient, $subject, $messageId, $replyToId, $fromAddress, $fromName, $preview, $raw, $date): void {
             $now = now();
             DB::table('incoming_objects')->insertOrIgnore([
                 'object_identity_sha256' => $identity,
@@ -320,7 +329,7 @@ class SyncR2Mail extends Command
             ]);
             DB::table('mail_recipients')->insert([
                 'mail_message_id' => $mailMessageId, 'type' => 'to',
-                'address' => $mailbox->address, 'created_at' => $now, 'updated_at' => $now,
+                'address' => $recipient, 'created_at' => $now, 'updated_at' => $now,
             ]);
             DB::table('incoming_objects')->where('id', $object->id)->update([
                 'processing_status' => 'processed',
