@@ -75,9 +75,16 @@ jobs:
       - name: Shell syntax validation
         run: |
           find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
-      - name: Certificate script command checks
+      - name: Shared Caddy gateway and legacy TLS regression checks
         run: |
+          set -euo pipefail
+          bash -n scripts/verify-domain-https.sh
+          bash -n scripts/verify-ip-https.sh
           bash -n scripts/renew-domain-https.sh
           bash -n scripts/renew-ip-https.sh
-          grep -Fq '"$IMAGE" run' scripts/renew-domain-https.sh
-          grep -Fq '"$IMAGE" run' scripts/renew-ip-https.sh
+          grep -Fq 'shared Caddy gateway' scripts/verify-domain-https.sh
+          grep -Fq 'https://$DOMAIN/api/status' scripts/verify-domain-https.sh
+          grep -Fq '127.0.0.1:8080' scripts/verify-domain-https.sh
+          ! grep -Fq 'verify-ip-https.sh' scripts/verify-domain-https.sh
+          grep -Fq 'Direct-IP HTTPS renewal is retired' scripts/renew-ip-https.sh
+          grep -Fq 'managed by the shared Caddy gateway' scripts/renew-domain-https.sh
