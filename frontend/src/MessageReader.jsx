@@ -178,6 +178,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
         <button type="button" className="message-back" onClick={onBack} title="Back to messages">← <span>Back</span></button>
         <div className="message-toolbar-actions">
           {message && message.folder === 'inbox' && <button type="button" className="message-back" disabled={actionBusy} title="Archive" onClick={() => moveMessage('archive')}>Archive</button>}
+          {message && message.folder === 'archive' && <button type="button" className="message-back" disabled={actionBusy} title="Move to Inbox" onClick={() => moveMessage('unarchive')}>Move to Inbox</button>}
           {message && <button type="button" className="message-back" disabled={actionBusy} title={message.folder === 'trash' ? 'Restore from Trash' : 'Move to Trash'} onClick={() => moveMessage(message.folder === 'trash' ? 'restore' : 'trash')}>{message.folder === 'trash' ? 'Restore' : 'Delete'}</button>}
           {message && <button type="button" className="message-back" onClick={() => onReply(message)}>↩ Reply</button>}
           {message && <button type="button" className="message-back" onClick={() => onReply(message, true)}>↪ Forward</button>}
