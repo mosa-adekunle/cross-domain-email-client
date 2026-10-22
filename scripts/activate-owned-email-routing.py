@@ -74,10 +74,10 @@ def preflight_zone(token, domain):
     return {"domain": domain, "zone": zone, "action": "activate"}
 
 
-def preflight(token):
+def preflight(token, domains=DOMAINS):
     results = []
     errors = []
-    for domain in DOMAINS:
+    for domain in domains:
         try:
             results.append(preflight_zone(token, domain))
         except RuntimeError as error:
@@ -91,12 +91,14 @@ def preflight(token):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Enable all safe unconfigured domains automatically")
+    parser.add_argument("--apply", action="store_true", help="Enable only the selected safe unconfigured domains")
+    parser.add_argument("--domain", choices=DOMAINS, help="Limit DNS/routing preflight and activation to one owned domain")
     args = parser.parse_args()
+    domains = (args.domain,) if args.domain else DOMAINS
     catchalls.deploy.validate_source()
     token = catchalls.deploy.credential()
-    results, errors = preflight(token)
-    if errors or len(results) != len(DOMAINS):
+    results, errors = preflight(token, domains)
+    if errors or len(results) != len(domains):
         raise RuntimeError("One or more domains failed safety preflight. Nothing changed.")
     if not args.apply:
         print("PREVIEW ONLY. No DNS/Email Routing changes performed.")
@@ -133,8 +135,9 @@ def main():
             )
         print(f"Enabled: {domain} Cloudflare Email Routing with managed MX/SPF.")
 
-    print("Cloudflare Email Routing confirmed ready on all five domains.")
-    print("Next: python3 scripts/configure-domain-catchalls.py --apply")
+    print("Cloudflare Email Routing confirmed ready for: " + ", ".join(domains))
+    selector = " --domain " + domains[0] if args.domain else ""
+    print("Next: python3 scripts/configure-domain-catchalls.py" + selector + " --apply")
     print("Note: address-specific forward rules still require their own cutover.")
 
 
