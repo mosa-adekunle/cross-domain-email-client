@@ -7,15 +7,20 @@ run configure-domain-catchalls.py --apply afterward.
 
 Default mode is a read-only preflight. --apply enables only when every
 currently unconfigured zone has *no conflicting apex MX or SPF records*.
-Requires Zone Settings Read/Write, Email Routing Rules Read/Write, DNS Read.
+Requires Zone Settings Read/Write and existing email-routing permissions.
+Uses Cloudflare DNS Read when available; otherwise requires two independent
+public DNS-over-HTTPS resolvers to agree before enabling an unconfigured zone.
 Existing DNS records are never changed directly by this program.
 """
 import argparse
 import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 
 BASE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("cdec_domain_catchalls", BASE / "configure-domain-catchalls.py")
@@ -26,14 +31,70 @@ spec.loader.exec_module(catchalls)
 DOMAINS = catchalls.DOMAINS
 
 
+
+def public_apex_records(domain, kind):
+    """Fail-closed DNS inventory when the Cloudflare DNS API returns 403.
+
+    Two independent public DNS resolvers must agree on the published apex
+    records. We *never* trust the Email Routing required-DNS endpoint as a
+    current DNS inventory. If results conflict/are invalid, refuse activation.
+    """
+    qtype = {"MX": 15, "TXT": 16}[kind]
+    urls = (
+        "https://cloudflare-dns.com/dns-query",
+        "https://dns.google/resolve",
+    )
+    inventories = []
+    for endpoint in urls:
+        query = urlencode({"name": domain, "type": kind})
+        req = Request(endpoint + "?" + query, headers={"Accept": "application/dns-json"})
+        try:
+            with urlopen(req, timeout=12) as response:
+                dns = json.load(response)
+        except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+            raise RuntimeError(f"Cannot independently verify published {kind} DNS at {domain}; no DNS changed.") from None
+        if not isinstance(dns, dict) or dns.get("Status") != 0 or dns.get("TC") or not isinstance(dns.get("Answer", []), list):
+            raise RuntimeError(f"DNS resolver did not return a complete successful {kind} response for {domain}.")
+        answers = dns.get("Answer", [])
+        if any(item.get("type") == 5 for item in answers if isinstance(item, dict)):
+            raise RuntimeError(f"Unexpected DNS alias (CNAME) at {domain}; cannot safely activate Email Routing.")
+        records = set()
+        for item in answers:
+            if not isinstance(item, dict):
+                raise RuntimeError(f"Invalid DNS answer at {domain}.")
+            if item.get("type") != qtype:
+                continue
+            if str(item.get("name", "")).rstrip(".").lower() != domain:
+                raise RuntimeError(f"DNS answer refers to an unexpected hostname at {domain}.")
+            if not isinstance(item.get("data"), str) or not item["data"]:
+                raise RuntimeError(f"DNS answer has no valid {kind} record at {domain}.")
+            records.add(item["data"].strip().lower())
+        inventories.append(records)
+
+    if inventories[0] != inventories[1]:
+        raise RuntimeError(
+            f"Independent resolvers disagree on published apex {kind} DNS for {domain}; "
+            "wait for DNS propagation or review records before activation."
+        )
+    print(f"{domain}: DNS API unavailable; independent public resolvers agree on {len(inventories[0])} apex {kind} record(s).")
+    return [{"name": domain, "type": kind, "content": value} for value in sorted(inventories[0])]
+
+
 def list_apex_records(token, zone_id, domain, kind):
     # Filtering at the DNS API prevents accidentally interpreting subdomain
     # sender MX/SPF (e.g. Resend 'send') as an apex conflict.
-    result = catchalls.deploy.api(
-        "GET", f"/zones/{zone_id}/dns_records?" +
-        urlencode({"type": kind, "name": domain, "page": 1, "per_page": 100}),
-        token,
-    )
+    try:
+        result = catchalls.deploy.api(
+            "GET", f"/zones/{zone_id}/dns_records?" +
+            urlencode({"type": kind, "name": domain, "page": 1, "per_page": 100}),
+            token,
+        )
+    except RuntimeError as error:
+        # DNS Read is not mandatory for the Email Routing activation API.
+        # Fall back only for this specific denied inventory request.
+        if f"/zones/{zone_id}/dns_records failed (HTTP 403" not in str(error):
+            raise
+        return public_apex_records(domain, kind)
     items = result.get("result")
     if not isinstance(items, list):
         raise RuntimeError(f"Could not audit {kind} DNS at {domain}.")
