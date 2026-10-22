@@ -69,7 +69,7 @@ class MessageListController
             });
         }
 
-        $messages = $query->paginate(25);
+        $messages = $query->paginate(50);
 
         // A Sent/Drafts row shows its recipient, not the sender. Use the
         // newest known incoming display name for matching recipient addresses
