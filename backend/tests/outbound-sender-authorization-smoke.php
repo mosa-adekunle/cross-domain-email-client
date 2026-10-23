@@ -21,5 +21,10 @@ checkOutboundSender(Authorization::allowed('invalid json', 'sales'), false, 'inv
 checkOutboundSender(Authorization::allowed('{"catchall":true,"outbound_enabled":true}', 'catchall'), false, 'catch-all never sends');
 checkOutboundSender(Authorization::allowed('{"catchall":true,"outbound_enabled":true}', 'somethingelse'), false, 'catch-all flag never sends');
 checkOutboundSender(Authorization::allowed(null, 'catchall'), false, 'catch-all local part never sends');
+checkOutboundSender(Authorization::allowed('{"onboarding_pending":true,"outbound_enabled":true}', 'billing'), true, 'any specifically approved named address may send');
+checkOutboundSender(Authorization::allowed('{"onboarding_pending":true,"outbound_enabled":false}', 'billing'), false, 'unapproved specific mailbox cannot send');
+
+$command = new App\Console\Commands\AuthorizeOutboundMailboxes();
+checkOutboundSender($command->getDefinition()->hasOption('address'), true, 'individual mailbox CLI option is registered');
 
 echo "Outbound sender authorization smoke tests passed.\n";
