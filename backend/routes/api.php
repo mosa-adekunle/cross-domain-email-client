@@ -6,6 +6,7 @@ use App\Http\Controllers\MessageListController;
 use App\Http\Controllers\MessageDetailController;
 use App\Http\Controllers\MessageActionController;
 use App\Http\Controllers\OutboundMailController;
+use App\Http\Controllers\WebsiteContactController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,11 @@ Route::get('/status', function (): JsonResponse {
         return response()->json(['service' => 'cross-domain-email-api', 'status' => 'unavailable', 'database' => 'unavailable'], 503);
     }
 });
+
+// Machine-only authenticated bridge for the corporate website's saved enquiries.
+// Payload HMAC is verified before validation or database access; not a public form.
+Route::post('/internal/website-contact', [WebsiteContactController::class, 'store'])
+    ->middleware('throttle:30,1');
 
 // All mailbox data is restricted to the authenticated administrator session.
 // The web middleware group applies cookies, database sessions and CSRF checks.
