@@ -42,7 +42,7 @@ final class WebsiteContactController
         $email = Str::lower($payload['email']);
         $body = "New Made North website enquiry\n\n"
             ."Name: ".$name."\nEmail: ".$email."\n"
-            ."Company: ".($payload['company'] ?: 'Not provided')."\n"
+            ."Company: ".(($payload['company'] ?? null) ?: 'Not provided')."\n"
             ."Interested in: ".$payload['interest']."\n"
             ."Reference: ".$payload['id']."\n\n"
             ."Message:\n".$payload['message'];
