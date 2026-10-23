@@ -512,10 +512,12 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
         <nav aria-label="Mailboxes" className="mailbox-nav">
           <button type="button" className={`mailbox-link ${messageHighlight.mailboxId === '' ? 'selected' : ''}`} aria-current={messageHighlight.mailboxId === '' ? 'page' : undefined} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, '')}>All mailboxes</button>
           {groupMailboxes(mailboxes).map(({ domain, mailboxes: domainMailboxes }) => (
-            <section className="mailbox-domain-group" key={domain} aria-label={`${domain} mailboxes`}>
-              <h3 className="mailbox-domain-heading">{domain}</h3>
+            <details className="mailbox-domain-group" key={`${domain}:${messageHighlight.mailboxId}`} open={domainMailboxes.some((mailbox) => String(mailbox.id) === messageHighlight.mailboxId)}>
+              <summary className="mailbox-domain-heading">{domain}</summary>
+              <div className="mailbox-domain-items">
               {domainMailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${messageHighlight.mailboxId === String(mailbox.id) ? 'selected' : ''}`} aria-current={messageHighlight.mailboxId === String(mailbox.id) ? 'page' : undefined} title={mailbox.address} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, String(mailbox.id))}>{mailbox.address}</button>)}
-            </section>
+              </div>
+            </details>
           ))}
           {!loadingSetup && !mailboxes.length && <span className="sidebar-hint">Add mailboxes in Settings</span>}
         </nav>
