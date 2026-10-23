@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\OutboundMessageData;
+use App\Support\OutboundSenderAuthorization;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,7 @@ class OutboundMailController
                 // their inbound routes and sender authorization are checked.
                 // Existing production mailboxes without the flag are unchanged.
                 $query->whereNull('settings')
-                    ->orWhereRaw("COALESCE(settings->>'onboarding_pending', 'false') <> 'true'");
+                    ->orWhereRaw("CASE WHEN settings ? 'outbound_enabled' THEN settings->'outbound_enabled' = 'true'::jsonb ELSE COALESCE(settings->'onboarding_pending', 'false'::jsonb) <> 'true'::jsonb END");
             })
             ->orderBy('address')
             ->get(['id', 'address', 'display_name']);
@@ -123,9 +124,8 @@ class OutboundMailController
                 abort(409, 'This draft is already being sent, or its delivery status is uncertain. It cannot be submitted again.');
             }
             $mailbox = $this->mailbox((int) $draft->mailbox_id);
-            $mailboxSettings = json_decode((string) ($mailbox->settings ?? ''), true);
-            if (($mailboxSettings['onboarding_pending'] ?? false) === true) {
-                abort(403, 'This address is still being configured and cannot send yet.');
+            if (! OutboundSenderAuthorization::allowed($mailbox->settings)) {
+                abort(403, 'This address is not authorized for outgoing mail.');
             }
             if (! OutboundMessageData::domainAllowed($mailbox->address)) {
                 abort(403, 'This sender domain has not been enabled for outgoing mail.');
