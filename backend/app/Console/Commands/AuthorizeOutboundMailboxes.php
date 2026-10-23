@@ -12,18 +12,20 @@ use Throwable;
  * Explicitly authorize existing named mailboxes for SMTP without enabling
  * inbound routing, changing DNS, or touching catch-all mailboxes.
  *
- * Resend verification is checked by the operator outside this command. Only
- * the two provider-verified domains are eligible as of October 23, 2026.
+ * Resend verification is checked by the operator outside this command.
+ * ReceiptBoss and Santa's Bag were verified on October 23, 2026.
+ * Made North can be authorized only after its verification is confirmed.
  * --address authorizes one existing named mailbox without editing the fixed
  * inventory used for bulk approval.
  */
 final class AuthorizeOutboundMailboxes extends Command
 {
-    protected $signature = 'mail:authorize-outbound {--domain= : One approved verified domain; default both} {--address= : One existing named sender mailbox on a verified domain} {--apply : Persist sender authorization; default preview}';
+    protected $signature = 'mail:authorize-outbound {--domain= : One approved domain; default the two original verified domains} {--address= : One existing named sender mailbox} {--confirm-madenorth-verified : Confirm Made North now shows Verified in Resend} {--apply : Persist sender authorization; default preview}';
 
     protected $description = 'Authorize approved named or individual existing mailboxes for Resend outbound sending';
 
-    private const VERIFIED_SENDER_DOMAINS = ['receiptboss.ca', 'santasbag.ca'];
+    private const DEFAULT_SENDER_DOMAINS = ['receiptboss.ca', 'santasbag.ca'];
+    private const APPROVABLE_SENDER_DOMAINS = ['receiptboss.ca', 'santasbag.ca', 'madenorth.dev'];
 
     public function handle(): int
     {
@@ -46,7 +48,7 @@ final class AuthorizeOutboundMailboxes extends Command
                 return self::FAILURE;
             }
         }
-        if ($requested !== '' && ! in_array($requested, self::VERIFIED_SENDER_DOMAINS, true)) {
+        if ($requested !== '' && ! in_array($requested, self::APPROVABLE_SENDER_DOMAINS, true)) {
             $this->error('Domain is not approved for outgoing mail. Verify it in Resend before changing the eligible-domain list.');
             return self::FAILURE;
         }
@@ -55,6 +57,7 @@ final class AuthorizeOutboundMailboxes extends Command
         $expected = [
             'receiptboss.ca' => ['sales', 'legal', 'privacy', 'hello'],
             'santasbag.ca' => ['sales', 'legal', 'privacy', 'hello'],
+            'madenorth.dev' => ['mosa', 'hello', 'sales'],
         ];
         if ($address === '') {
             foreach ($expected as $domain => $addresses) {
@@ -65,9 +68,13 @@ final class AuthorizeOutboundMailboxes extends Command
             }
         }
 
-        $domains = $requested !== '' ? [$requested] : self::VERIFIED_SENDER_DOMAINS;
+        $domains = $requested !== '' ? [$requested] : self::DEFAULT_SENDER_DOMAINS;
         $apply = (bool) $this->option('apply');
         if ($apply) {
+            if (in_array('madenorth.dev', $domains, true) && ! (bool) $this->option('confirm-madenorth-verified')) {
+                $this->error('Made North cannot be enabled until Resend shows Verified. After checking Resend, repeat with --confirm-madenorth-verified.');
+                return self::FAILURE;
+            }
             if (! OutboundMessageData::configured()
                 || strcasecmp((string) config('mail.mailers.smtp.host'), 'smtp.resend.com') !== 0
                 || strcasecmp((string) config('mail.mailers.smtp.username'), 'resend') !== 0) {
