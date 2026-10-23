@@ -427,24 +427,29 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
 
   useEffect(() => {
     const motionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    const reducedMotion = motionPreference?.matches === true;
-    const baseTitle = mailPageTitle(totalUnreadCount);
-    document.title = baseTitle;
-
-    // Browser tab titles cannot use CSS animation. Alternate a small, visible
-    // indicator while keeping the count in both states. The browser may
-    // throttle this timer when the tab is in the background.
-    if (!shouldPulseMailTitle(totalUnreadCount, reducedMotion)) {
-      return () => { document.title = mailPageTitle(0); };
-    }
-
+    const normalTitle = mailPageTitle(totalUnreadCount);
+    let interval = null;
     let pulse = false;
-    const interval = window.setInterval(() => {
-      pulse = !pulse;
-      document.title = mailPageTitle(totalUnreadCount, pulse);
-    }, 1500);
+
+    // Browser tab titles cannot use CSS animation. Alternate a visible dot
+    // while keeping the unread count displayed in both phases. Background
+    // browsers may throttle the interval.
+    const updateMotion = () => {
+      if (interval !== null) window.clearInterval(interval);
+      interval = null;
+      pulse = false;
+      document.title = normalTitle;
+      if (!shouldPulseMailTitle(totalUnreadCount, motionPreference?.matches === true)) return;
+      interval = window.setInterval(() => {
+        pulse = !pulse;
+        document.title = mailPageTitle(totalUnreadCount, pulse);
+      }, 1500);
+    };
+    updateMotion();
+    motionPreference?.addEventListener?.('change', updateMotion);
     return () => {
-      window.clearInterval(interval);
+      if (interval !== null) window.clearInterval(interval);
+      motionPreference?.removeEventListener?.('change', updateMotion);
       document.title = mailPageTitle(0);
     };
   }, [totalUnreadCount]);
