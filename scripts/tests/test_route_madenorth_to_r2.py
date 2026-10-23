@@ -24,12 +24,71 @@ def rule(address, action=None, enabled=True):
 
 def state(actions=None, enabled=False, rules=None):
     return {"domain": "madenorth.dev", "zone_id": ZONE,
-            "catchall": {"source": "api", "enabled": enabled,
+            "catchall": {"id": "c" * 32, "source": "api", "enabled": enabled,
                          "matchers": [{"type": "all"}],
                          "actions": [{"type": "drop"}] if actions is None else actions},
             "rules": rules or []}
 
 class MadeNorthR2Tests(unittest.TestCase):
+    def test_listed_echo_of_catchall_is_verified_and_skipped(self):
+        snapshot = state(WORKER, True, [rule(x) for x in app.ADDRESSES])
+        echo = dict(snapshot["catchall"])
+        snapshot["rules"].insert(0, echo)
+        planned = app.plan(snapshot)
+        self.assertEqual(planned["changes"], [])
+        self.assertFalse(planned["catchall"])
+        self.assertEqual(len(app.exact_address_rules(snapshot)), 3)
+
+    def test_listed_disabled_catchall_echo_does_not_block_preview(self):
+        snapshot = state()
+        snapshot["rules"] = [dict(snapshot["catchall"])]
+        planned = app.plan(snapshot)
+        self.assertEqual([x[0] for x in planned["changes"]], ["create"] * 3)
+        self.assertTrue(planned["catchall"])
+
+    def test_other_wildcard_rule_still_fails_closed(self):
+        snapshot = state(WORKER, True)
+        wrong = dict(snapshot["catchall"])
+        wrong["id"] = "d" * 32
+        snapshot["rules"] = [wrong]
+        with self.assertRaisesRegex(RuntimeError, "additional wildcard"):
+            app.plan(snapshot)
+
+    def test_catchall_echo_with_different_delivery_is_rejected(self):
+        snapshot = state(WORKER, True)
+        wrong = dict(snapshot["catchall"])
+        wrong["actions"] = [{"type": "forward", "value": ["previous@example.com"]}]
+        snapshot["rules"] = [wrong]
+        with self.assertRaisesRegex(RuntimeError, "differs"):
+            app.plan(snapshot)
+
+    def test_missing_wildcard_identity_is_rejected(self):
+        snapshot = state(WORKER, True)
+        wrong = dict(snapshot["catchall"])
+        wrong.pop("id")
+        snapshot["rules"] = [wrong]
+        with self.assertRaisesRegex(RuntimeError, "no verifiable Cloudflare ID"):
+            app.plan(snapshot)
+
+    def test_unsupported_active_matcher_has_actionable_diagnostics(self):
+        snapshot = state(WORKER, True)
+        weird = rule("hello@madenorth.dev")
+        weird["matchers"] = [{"type": "all"}]
+        snapshot["rules"] = [weird]
+        with self.assertRaisesRegex(RuntimeError, "additional wildcard"):
+            app.plan(snapshot)
+        weird["matchers"] = [{"type": "regexp", "field": "to", "value": "*"}]
+        with self.assertRaisesRegex(RuntimeError, "Unsupported Cloudflare Email Routing rule matcher"):
+            app.plan(snapshot)
+
+    def test_unrelated_disabled_rule_cannot_bypass_matcher_validation(self):
+        snapshot = state(WORKER, True)
+        weird = rule("hello@madenorth.dev", enabled=False)
+        weird["matchers"] = []
+        snapshot["rules"] = [weird]
+        with self.assertRaisesRegex(RuntimeError, "Unsupported Cloudflare"):
+            app.plan(snapshot)
+
     def test_builds_three_business_routes_and_catchall(self):
         planned = app.plan(state())
         self.assertEqual([x[1] for x in planned["changes"]], list(app.ADDRESSES))
@@ -70,7 +129,7 @@ class MadeNorthR2Tests(unittest.TestCase):
             app.plan(state(rules=[rule("hello@madenorth.dev"), rule("hello@madenorth.dev")]))
         malformed = rule("hello@madenorth.dev")
         malformed["matchers"] = [{"type": "all"}]
-        with self.assertRaisesRegex(RuntimeError, "Unexpected active"):
+        with self.assertRaisesRegex(RuntimeError, "additional wildcard"):
             app.plan(state(rules=[malformed]))
 
     def test_disabled_business_rule_requires_review(self):

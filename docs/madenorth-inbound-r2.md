@@ -147,3 +147,7 @@ sudo docker compose exec -T api php artisan mail:provision-brand-mailboxes --dom
 ```
 
 The final preview must show **0 domain(s) to create and 0 mailbox(es) to stage** before using `route-madenorth-to-r2.py --apply`. The same apply preflight also checks the private R2 importer's read-only access. The mailbox provisioning command never enables outbound SMTP or mail forwarding.
+
+### Cloudflare wildcard listing compatibility
+
+Cloudflare may return the default catch-all a second time inside its general routing-rule list, with `matchers: [{"type":"all"}]`. The Made North preview now recognizes **only** an identical catch-all (matching rule ID, enabled state, action and management source) and skips its duplicate listing. A distinct wildcard, malformed rule, or mismatched catch-all still blocks changes with a descriptive, non-sensitive error. This avoids treating a wildcard as an exact inbox address. After updating the code, re-run `python3 scripts/route-madenorth-to-r2.py` without flags; do not jump directly to `--apply`.
