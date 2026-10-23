@@ -36,12 +36,15 @@ jobs:
         run: php backend/tests/brand-mailboxes-smoke.php
       - name: Catch-all domain and importer integrity checks
         run: php backend/tests/catchall-domains-smoke.php
+      - name: Website contact HMAC safety smoke tests
+        run: php backend/tests/contact-bridge-smoke.php
       - name: ReceiptBoss Cloudflare deployment safety tests
         run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
       - name: Laravel outgoing route registration
         run: |
           php backend/artisan route:list --path=api/drafts
           php backend/artisan route:list --path=api/outbound
+          php backend/artisan route:list --path=api/internal/website-contact
           php backend/artisan route:list --path=api/messages/actions
       - name: Frontend navigation tests and production build
         run: |

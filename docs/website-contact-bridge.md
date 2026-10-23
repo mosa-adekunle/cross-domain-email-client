@@ -1,0 +1,13 @@
+# Contact enquiries and live browser unread count
+
+## Browser tab unread count
+
+The authenticated React workspace polls `/api/messages/unread-count` about every 30 seconds, including while a tab is open in the background where the browser permits timers. The endpoint returns both the count in the currently selected mailbox and `total_unread_count` across **all** mailboxes. The sidebar keeps its selected-mailbox count, while `document.title` uses the global total: `(10 new) Mail - Made North Technologies`. When all messages have been read, the title returns to `Mail - Made North Technologies`. The title updates after reading or moving mail, on timer polling and on tab visibility changes; no refresh required.
+
+## Website contact form ingress
+
+Website form posts are **not SMTP mail** and do not appear in Cloudflare R2. They are stored first in the Made North website's database. The corporate website then POSTs the exact contact fields over validated HTTPS with a timestamped HMAC-SHA256 signature using `WEBSITE_CONTACT_BRIDGE_SECRET` to `/api/internal/website-contact`, which writes one unread message to `hello@madenorth.dev` with an idempotency receipt in `website_contact_deliveries`. The mail application always validates the HMAC before parsing/saving the request. Unauthorized, stale, unsigned and oversized requests are rejected.
+
+Deploy with the same secret (minimum 32 random bytes) **only in the two server-side `.env` files**. The email-client Compose configuration forwards the secret into the PHP container; never put the secret in Git, a browser, or public API logs. Run `sudo docker compose exec -T api php artisan migrate --force` to create the receipt table, then recreate the API container after installing the secret. The website repository includes `scripts/configure-contact-mail-bridge.sh` to generate and write the same secret privately into both applications' `.env` files and a timer to retry undelivered website contacts. Deploy **the mail client first**, then the website and its bridge configuration. The website's new contact records are stored directly in the mail client's PostgreSQL inbox and **do not consume the Cloudflare R2 SMTP importer**; real received email continues to be archived in R2.
+
+Validation: submit one new Made North contact enquiry, verify `hello@madenorth.dev` shows one unread `Website enquiry:` message with the visitor's reply address, check that the title increments, open the message and verify the title decrements. Repeat the website delivery command; the same enquiry UUID must not create duplicates. On failure, inspect the site's `made-north-contact-inbox.service` journal; the saved submission remains available for retry.

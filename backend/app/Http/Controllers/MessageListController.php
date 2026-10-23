@@ -18,10 +18,14 @@ class MessageListController
             ->where('folder', 'inbox')
             ->where('is_read', false)
             ->whereNull('deleted_at');
+        $totalUnread = (clone $query)->count();
         if (isset($filters['mailbox_id'])) {
             $query->where('mailbox_id', $filters['mailbox_id']);
         }
-        return response()->json(['unread_count' => $query->count()])
+        return response()->json([
+            'unread_count' => $query->count(),
+            'total_unread_count' => $totalUnread,
+        ])
             ->header('Cache-Control', 'no-store');
     }
 
