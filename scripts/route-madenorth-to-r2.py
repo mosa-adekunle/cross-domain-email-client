@@ -71,6 +71,46 @@ def recipient(rule):
     return address
 
 
+def is_echoed_catchall(rule, catchall):
+    """Cloudflare can include the same 'all' rule in both list and catch_all.
+
+    Only ignore the verified copy of the separately fetched catch-all rule.
+    A different wildcard rule could intercept mail and must fail closed.
+    """
+    if rule.get("matchers") != [{"type": "all"}]:
+        return False
+    rid = rule.get("id")
+    cid = catchall.get("id")
+    if not isinstance(rid, str) or not re.fullmatch(r"[a-f0-9]{32}", rid):
+        raise RuntimeError("Listed wildcard rule has no verifiable Cloudflare ID; no changes made.")
+    if rid != cid:
+        raise RuntimeError("Unexpected additional wildcard Email Routing rule (id prefix " +
+                           rid[:8] + "). Compare it to the catch-all in Cloudflare before proceeding.")
+    if (rule.get("actions") != catchall.get("actions") or
+        rule.get("enabled") != catchall.get("enabled") or
+        rule.get("source", "api") != catchall.get("source", "api")):
+        raise RuntimeError("Listed catch-all rule differs from dedicated catch-all endpoint; no changes made.")
+    return True
+
+
+def exact_address_rules(snapshot):
+    """Return only exact-address rules after strictly verifying wildcard echoes."""
+    result = []
+    for rule in snapshot["rules"]:
+        if is_echoed_catchall(rule, snapshot["catchall"]):
+            continue
+        matchers = rule.get("matchers") or []
+        if (len(matchers) != 1 or not isinstance(matchers[0], dict) or
+            matchers[0].get("type") != "literal" or matchers[0].get("field") != "to"):
+            types = ",".join(str(m.get("type", "?")) for m in matchers if isinstance(m, dict))
+            raise RuntimeError("Unsupported Cloudflare Email Routing rule matcher (" +
+                               (types or "missing") + ", id prefix " +
+                               str(rule.get("id", "missing"))[:8] +
+                               "). Review exact-address and catch-all rules; no changes made.")
+        result.append(rule)
+    return result
+
+
 def plan(snapshot, replace_existing=False):
     if snapshot.get("domain") != DOMAIN or not re.fullmatch(r"[a-f0-9]{32}", str(snapshot.get("zone_id"))):
         raise RuntimeError("Cloudflare Made North zone identity cannot be verified.")
@@ -85,15 +125,11 @@ def plan(snapshot, replace_existing=False):
     existing = {}
     changes = []
     disabled = set()
-    for rule in snapshot["rules"]:
+    for rule in exact_address_rules(snapshot):
         if not rule.get("enabled"):
-            # Other disabled rules do not intercept live delivery. Disabled rules
-            # for a required identity must be inspected to avoid duplicates.
-            try:
-                address = recipient(rule)
-            except RuntimeError:
-                continue
-            disabled.add(address)
+            # Disabled explicit rules cannot receive mail but may prevent creating
+            # the three approved identities. Do not silently skip them.
+            disabled.add(recipient(rule))
             continue
         address = recipient(rule)
         if address in existing:
@@ -181,7 +217,7 @@ def apply(token, before, intended, replace_existing=False):
     zone = before["zone_id"]
     for operation, address, old in intended["changes"]:
         state = inspect(token)
-        found = [rule for rule in state["rules"] if rule.get("enabled") and recipient(rule) == address]
+        found = [rule for rule in exact_address_rules(state) if rule.get("enabled") and recipient(rule) == address]
         if operation == "create":
             if found:
                 raise RuntimeError("Conflicting new route appeared for " + address)
@@ -191,7 +227,7 @@ def apply(token, before, intended, replace_existing=False):
                 raise RuntimeError("Original rule changed for " + address + "; stop.")
             helpers.deploy.api("PUT", f"/zones/{zone}/email/routing/rules/{old['id']}",
                                token, target_rule(address, old))
-        verified = [rule for rule in list_rules(token, zone)
+        verified = [rule for rule in exact_address_rules(inspect(token))
                     if rule.get("enabled") and recipient(rule) == address]
         if len(verified) != 1 or verified[0].get("actions") != ACTION:
             raise RuntimeError("Could not verify R2 Worker for " + address)
