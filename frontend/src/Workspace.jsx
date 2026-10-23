@@ -3,6 +3,7 @@ import MessageReader from './MessageReader.jsx';
 import ComposeMail from './ComposeMail.jsx';
 import { readMailLocation, mailLocationUrl, mailPageUrl, messagePageRange } from './mailLocation.js';
 import { messageNavigationHighlight } from './messageHighlight.js';
+import { groupMailboxes } from './mailboxGroups.js';
 
 const folders = [
   { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
@@ -510,7 +511,12 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
         <div className="section-label mailbox-label">MAILBOXES</div>
         <nav aria-label="Mailboxes" className="mailbox-nav">
           <button type="button" className={`mailbox-link ${messageHighlight.mailboxId === '' ? 'selected' : ''}`} aria-current={messageHighlight.mailboxId === '' ? 'page' : undefined} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, '')}>All mailboxes</button>
-          {mailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${messageHighlight.mailboxId === String(mailbox.id) ? 'selected' : ''}`} aria-current={messageHighlight.mailboxId === String(mailbox.id) ? 'page' : undefined} title={mailbox.address} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, String(mailbox.id))}>{mailbox.address}</button>)}
+          {groupMailboxes(mailboxes).map(({ domain, mailboxes: domainMailboxes }) => (
+            <section className="mailbox-domain-group" key={domain} aria-label={`${domain} mailboxes`}>
+              <h3 className="mailbox-domain-heading">{domain}</h3>
+              {domainMailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${messageHighlight.mailboxId === String(mailbox.id) ? 'selected' : ''}`} aria-current={messageHighlight.mailboxId === String(mailbox.id) ? 'page' : undefined} title={mailbox.address} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, String(mailbox.id))}>{mailbox.address}</button>)}
+            </section>
+          ))}
           {!loadingSetup && !mailboxes.length && <span className="sidebar-hint">Add mailboxes in Settings</span>}
         </nav>
         <div className="sidebar-bottom"><span className="account-avatar">{(user.name || 'A').charAt(0).toUpperCase()}</span><span className="account-name" title={user.name}>Signed in as <strong>{user.name}</strong></span></div>
