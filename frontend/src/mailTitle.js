@@ -9,5 +9,5 @@ export function mailPageTitle(totalUnreadCount, pulsed = false) {
   const count = Number(totalUnreadCount);
   if (!Number.isSafeInteger(count) || count <= 0) return MAIL_BASE_TITLE;
   const unreadTitle = `(${count} new) ${MAIL_BASE_TITLE}`;
-  return pulsed ? `🔴 ${unreadTitle}` : unreadTitle;
+  return `${pulsed ? '🟢' : '🔴'} ${unreadTitle}`;
 }
