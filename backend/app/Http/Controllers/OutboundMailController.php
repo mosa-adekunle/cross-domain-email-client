@@ -24,6 +24,13 @@ class OutboundMailController
                 ->select('id')->whereIn('domain_name', config('outbound.allowed_domains', [])))
             ->where('local_part', '<>', 'catchall')
             ->where(function ($query): void {
+                // Made North requires explicit per-mailbox outbound approval,
+                // even for legacy rows with no JSON settings.
+                $query->whereNotIn('mail_domain_id', DB::table('mail_domains')
+                    ->select('id')->where('domain_name', 'madenorth.dev'))
+                    ->orWhereRaw("settings->'outbound_enabled' = 'true'::jsonb");
+            })
+            ->where(function ($query): void {
                 // Newly staged mailboxes cannot be offered for sending until
                 // their inbound routes and sender authorization are checked.
                 // Existing production mailboxes without the flag are unchanged.
@@ -125,7 +132,8 @@ class OutboundMailController
                 abort(409, 'This draft is already being sent, or its delivery status is uncertain. It cannot be submitted again.');
             }
             $mailbox = $this->mailbox((int) $draft->mailbox_id);
-            if (! OutboundSenderAuthorization::allowed($mailbox->settings, $mailbox->local_part)) {
+            $senderDomain = strtolower(substr($mailbox->address, strrpos($mailbox->address, '@') + 1));
+            if (! OutboundSenderAuthorization::allowed($mailbox->settings, $mailbox->local_part, $senderDomain)) {
                 abort(403, 'This address is not authorized for outgoing mail.');
             }
             if (! OutboundMessageData::domainAllowed($mailbox->address)) {
