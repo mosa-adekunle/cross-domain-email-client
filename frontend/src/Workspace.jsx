@@ -5,7 +5,7 @@ import { readMailLocation, mailLocationUrl, mailPageUrl, messagePageRange } from
 import { messageNavigationHighlight } from './messageHighlight.js';
 import { groupMailboxes } from './mailboxGroups.js';
 import { mailboxBrand } from './mailboxBrands.js';
-import { mailPageTitle } from './mailTitle.js';
+import { mailPageTitle, shouldPulseMailTitle } from './mailTitle.js';
 
 const folders = [
   { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
@@ -426,8 +426,32 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   }, [selectedMailbox, unreadRefreshKey, onExpired]);
 
   useEffect(() => {
-    document.title = mailPageTitle(totalUnreadCount);
-    return () => { document.title = mailPageTitle(0); };
+    const motionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    const normalTitle = mailPageTitle(totalUnreadCount);
+    let interval = null;
+    let pulse = false;
+
+    // Browser tab titles cannot use CSS animation. Alternate a visible dot
+    // while keeping the unread count displayed in both phases. Background
+    // browsers may throttle the interval.
+    const updateMotion = () => {
+      if (interval !== null) window.clearInterval(interval);
+      interval = null;
+      pulse = false;
+      document.title = normalTitle;
+      if (!shouldPulseMailTitle(totalUnreadCount, motionPreference?.matches === true)) return;
+      interval = window.setInterval(() => {
+        pulse = !pulse;
+        document.title = mailPageTitle(totalUnreadCount, pulse);
+      }, 1500);
+    };
+    updateMotion();
+    motionPreference?.addEventListener?.('change', updateMotion);
+    return () => {
+      if (interval !== null) window.clearInterval(interval);
+      motionPreference?.removeEventListener?.('change', updateMotion);
+      document.title = mailPageTitle(0);
+    };
   }, [totalUnreadCount]);
 
   useEffect(() => {
