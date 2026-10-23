@@ -399,7 +399,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     const params = new URLSearchParams();
     if (selectedMailbox) params.set('mailbox_id', String(selectedMailbox));
     const checkUnread = async () => {
-      if (!active || fetching || document.visibilityState === 'hidden') return;
+      if (!active || fetching) return;
       fetching = true;
       try {
         const response = await api('/messages/unread-count' + (params.size ? '?' + params.toString() : ''));

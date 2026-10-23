@@ -44,6 +44,7 @@ jobs:
         run: |
           php backend/artisan route:list --path=api/drafts
           php backend/artisan route:list --path=api/outbound
+          php backend/artisan route:list --path=api/internal/website-contact
           php backend/artisan route:list --path=api/messages/actions
       - name: Frontend navigation tests and production build
         run: |
