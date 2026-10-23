@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="43 27 354 330" role="img" aria-labelledby="title desc">
+  <title id="title">Santa's Bag maple leaf logo</title>
+  <desc id="desc">A red gift bag wearing a Santa hat with a white Canadian maple leaf on the front.</desc>
+
+  <g fill="none" stroke="#252525" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+
+    <path
+      d="M106 103
+         C126 53 183 27 245 39
+         C273 44 299 57 318 77
+         C284 74 252 83 226 102
+         C207 116 188 126 164 127
+         C142 129 121 119 106 103Z"
+      fill="#E83A2F"/>
+
+    <circle cx="329" cy="70" r="19" fill="#F8F8F8"/>
+
+    <path
+      d="M97 108
+         C137 91 184 86 229 91
+         C264 95 295 104 321 119
+         C315 137 302 151 286 160
+         C258 146 225 139 191 139
+         C153 139 121 146 91 159
+         C88 141 90 123 97 108Z"
+      fill="#FFFFFF"/>
+
+    <path d="M79 147 C54 151 43 169 51 187 C59 204 79 207 96 194" />
+
+    <path
+      d="M111 148
+         L171 138
+         L171 341
+         L103 325
+         C98 281 96 240 99 199
+         C101 176 104 159 111 148Z"
+      fill="#C92A22"/>
+
+    <path
+      d="M171 138
+         C222 130 284 132 344 143
+         C354 145 361 153 363 163
+         L389 320
+         C391 335 380 347 365 349
+         L171 341Z"
+      fill="#ED3B2F"/>
+
+    <path
+      d="M171 138
+         C224 129 286 131 344 143"
+      stroke="#252525"/>
+
+    <path
+      d="M191 163
+         C236 156 286 158 332 166"
+      stroke="#F25A4F"
+      stroke-width="7"
+      opacity="0.55"/>
+
+    <path
+      d="M279 186
+         L291 217
+         L320 203
+         L314 235
+         L348 231
+         L323 254
+         L344 273
+         L309 276
+         L313 311
+         L284 292
+         L277 330
+         L270 292
+         L241 311
+         L245 276
+         L210 273
+         L231 254
+         L206 231
+         L240 235
+         L234 203
+         L263 217Z"
+      fill="#FFFFFF"
+      stroke="none"/>
+
+    <path
+      d="M277 304 L277 337"
+      stroke="#FFFFFF"
+      stroke-width="11"/>
+
+  </g>
+</svg>

@@ -4,6 +4,7 @@ import ComposeMail from './ComposeMail.jsx';
 import { readMailLocation, mailLocationUrl, mailPageUrl, messagePageRange } from './mailLocation.js';
 import { messageNavigationHighlight } from './messageHighlight.js';
 import { groupMailboxes } from './mailboxGroups.js';
+import { mailboxBrand } from './mailboxBrands.js';
 
 const folders = [
   { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
@@ -512,8 +513,8 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
         <nav aria-label="Mailboxes" className="mailbox-nav">
           <button type="button" className={`mailbox-link ${messageHighlight.mailboxId === '' ? 'selected' : ''}`} aria-current={messageHighlight.mailboxId === '' ? 'page' : undefined} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, '')}>All mailboxes</button>
           {groupMailboxes(mailboxes).map(({ domain, mailboxes: domainMailboxes }) => (
-            <details className="mailbox-domain-group" key={`${domain}:${messageHighlight.mailboxId}`} open={domainMailboxes.some((mailbox) => String(mailbox.id) === messageHighlight.mailboxId)}>
-              <summary className="mailbox-domain-heading">{domain}</summary>
+            <details className="mailbox-domain-group" style={mailboxBrand(domain).style} key={`${domain}:${messageHighlight.mailboxId}`} open={domainMailboxes.some((mailbox) => String(mailbox.id) === messageHighlight.mailboxId)}>
+              <summary className="mailbox-domain-heading"><span className="mailbox-domain-title">{mailboxBrand(domain).logo ? <img className="mailbox-domain-logo" src={mailboxBrand(domain).logo} alt="" width="22" height="22" /> : <span className="mailbox-domain-initials" aria-hidden="true">{mailboxBrand(domain).initials}</span>}<span>{domain}</span></span></summary>
               <div className="mailbox-domain-items">
               {domainMailboxes.map((mailbox) => <button key={mailbox.id} type="button" className={`mailbox-link ${messageHighlight.mailboxId === String(mailbox.id) ? 'selected' : ''}`} aria-current={messageHighlight.mailboxId === String(mailbox.id) ? 'page' : undefined} title={mailbox.address} onClick={() => navigateToView(isSettings ? 'Unified inbox' : activeFolder, String(mailbox.id))}>{mailbox.address}</button>)}
               </div>

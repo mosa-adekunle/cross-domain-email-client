@@ -1049,3 +1049,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mailbox-domain-group > summary:focus-visible { outline: 2px solid #174ea6; outline-offset: 3px; border-radius: 3px; }
 .mailbox-domain-heading { margin: 12px 16px 4px 24px; color: #53647c; font-size: 11px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
 .mailbox-domain-group .mailbox-link { min-width: 0; padding-left: 32px; }
+
+/* Locally bundled brand marks and accessible domain-specific nav accents. */
+.mailbox-domain-group { --mailbox-brand: #53647c; --mailbox-ink: #174ea6; --mailbox-tint: #e4edf9; }
+.mailbox-domain-title { display: inline-flex; align-items: center; gap: 8px; max-width: calc(100% - 16px); vertical-align: middle; }
+.mailbox-domain-title > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.mailbox-domain-logo, .mailbox-domain-initials { width: 22px; height: 22px; flex: 0 0 22px; object-fit: contain; }
+.mailbox-domain-initials { display: inline-grid; place-items: center; border-radius: 5px; background: #e4e9f0; color: #53647c; font-size: 10px; }
+.mailbox-domain-group > summary { color: var(--mailbox-ink); }
+.mailbox-domain-group > summary:hover { color: var(--mailbox-ink); }
+.mailbox-domain-group > summary:focus-visible, .mailbox-domain-group .mailbox-link:focus-visible { outline-color: var(--mailbox-brand); }
+.mailbox-domain-group .mailbox-link:hover,
+.mailbox-domain-group .mailbox-link.selected,
+.mailbox-domain-group .mailbox-link.selected:hover { background: var(--mailbox-tint); color: var(--mailbox-ink); }
+.mailbox-domain-group .mailbox-link.selected { box-shadow: inset 3px 0 var(--mailbox-brand); }
