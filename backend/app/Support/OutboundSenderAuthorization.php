@@ -12,14 +12,23 @@ namespace App\Support;
  */
 final class OutboundSenderAuthorization
 {
-    public static function allowed(?string $settings): bool
+    public static function allowed(?string $settings, ?string $localPart = null): bool
     {
+        // Catch-all inboxes are receiving containers, never sender identities.
+        if (strtolower((string) $localPart) === 'catchall') {
+            return false;
+        }
+
         if ($settings === null || trim($settings) === '') {
             return true;
         }
 
         $flags = json_decode($settings, true);
         if (! is_array($flags)) {
+            return false;
+        }
+
+        if (($flags['catchall'] ?? false) === true) {
             return false;
         }
 
