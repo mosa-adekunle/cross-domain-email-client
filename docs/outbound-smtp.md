@@ -28,7 +28,7 @@ MAIL_SCHEME=smtp
 MAIL_USERNAME=resend
 MAIL_PASSWORD=YOUR_NEW_DEDICATED_SMTP_KEY
 OUTBOUND_PROVIDER_LABEL=Resend
-OUTBOUND_ALLOWED_DOMAINS=receiptboss.ca
+OUTBOUND_ALLOWED_DOMAINS=receiptboss.ca,santasbag.ca
 ```
 
 SMTP port 587 uses STARTTLS where the provider advertises it; use smtps and 465 for implicit TLS as required by a different provider. Only listed domains and addresses that exist in the configured mailbox table can be used as sender identities. A mailbox may still be inactive for inbound routing; **outbound** authorization is independent and explicit. No Laravel log-mail fallback is enabled.
@@ -75,7 +75,7 @@ The explicitly approved sender inventory is in `backend/config/brand_mailboxes.p
 
 - ReceiptBoss: `sales@`, `legal@`, `privacy@`, `hello@receiptboss.ca`.
 - Santa's Bag: `sales@`, `legal@`, `privacy@`, `hello@santasbag.ca`.
-- Made North's `mosa@`, `hello@`, and `sales@madenorth.dev` remain **pending** until that domain is verified and a separate code change authorizes it.
+- Made North's `mosa@`, `hello@`, and `sales@madenorth.dev` remain **pending** until its Resend status is Verified. The backend now supports approving them with an explicit confirmation flag after verification; see [the complete Made North activation instructions](madenorth-outbound-activation.md).
 
 Existing `support@receiptboss.ca` and `inbox-test@receiptboss.ca` are unaffected. Catch-all inboxes are **never** valid senders. Inbound Cloudflare readiness does not prove outbound verification, and outbound approval never alters Gmail forwarding, inbox activation, DNS, Worker routes or R2.
 
@@ -88,7 +88,7 @@ cd ~/cross-domain-email-client
 git pull --ff-only origin main
 
 # Edit only if needed. Keep the existing dedicated SMTP credentials; never print them.
-# Set OUTBOUND_ALLOWED_DOMAINS=receiptboss.ca,santasbag.ca in the private .env.
+# Keep OUTBOUND_ALLOWED_DOMAINS=receiptboss.ca,santasbag.ca until Made North is verified; then append madenorth.dev.
 sudo docker compose config --quiet
 sudo docker compose build api
 sudo docker compose up -d --no-deps --force-recreate api
@@ -125,7 +125,7 @@ The `mail:authorize-outbound` command supports two workflows:
 
 The address must already exist in the `mailboxes` table. If it does not, add it first in Mailbox Settings. The individual command does not create domains or mailboxes, change `is_active`, activate a forwarding rule, update DNS, or modify any other email address. Approval sets only that mailbox's JSON `settings.outbound_enabled=true`, preserving `settings.onboarding_pending`. Catch-all identities, including a mailbox marked as catch-all in settings, are rejected.
 
-Resend currently verifies **receiptboss.ca** and **santasbag.ca** for outbound delivery; `madenorth.dev` remains **not_started**. The CLI deliberately permits individual approvals only within the two verified domains, and its `--apply` mode requires live Resend SMTP configuration plus the same domain in the private `OUTBOUND_ALLOWED_DOMAINS` variable. It does not assume inbound verification proves sending eligibility. Check verification again before approval and update the code's verified-domain allowlist only after the provider has verified a new domain.
+Resend currently verifies **receiptboss.ca** and **santasbag.ca** for outbound delivery; `madenorth.dev` remains **not_started**. The CLI also supports Made North approvals but **only after provider verification**; its `--apply` action additionally requires `--confirm-madenorth-verified` for that domain, configured Resend SMTP, and the domain in private `OUTBOUND_ALLOWED_DOMAINS`. Without explicit individual approval, existing Made North mailboxes (including legacy rows with missing settings) cannot send. Follow [Made North's DNS and SMTP checklist](madenorth-outbound-activation.md) for exact Cloudflare records and commands.
 
 ### Deploy this backend-only change
 
@@ -170,4 +170,4 @@ sudo docker compose exec -T api php artisan mail:authorize-outbound --address=bi
 
 Substitute the exact existing address you intend to send from. The per-address authorization command is idempotent: re-approving an already approved mailbox is a no-op. When a new mailbox is created in a currently approved domain, it still requires this explicit per-address approval; this is intentionally **not** a wildcard send-as privilege.
 
-To authorize the original eight predefined business addresses instead, continue using the previous `--domain=...` commands. The existing `support@receiptboss.ca` and `inbox-test@receiptboss.ca` pilot senders remain unchanged. Test one manually chosen email addressed to an inbox you control and confirm its provider delivery state; the CLI performs no sends.
+To authorize the original eight predefined ReceiptBoss / Santa's Bag addresses instead, continue using the previous `--domain=...` commands. Made North uses `--domain=madenorth.dev --confirm-madenorth-verified --apply` **only after** Resend verification. The existing `support@receiptboss.ca` and `inbox-test@receiptboss.ca` pilot senders remain unchanged. Test one manually chosen email addressed to an inbox you control and confirm its provider delivery state; the CLI performs no sends.
