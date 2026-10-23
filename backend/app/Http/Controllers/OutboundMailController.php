@@ -22,12 +22,13 @@ class OutboundMailController
         $senders = DB::table('mailboxes')
             ->whereIn('mail_domain_id', DB::table('mail_domains')
                 ->select('id')->whereIn('domain_name', config('outbound.allowed_domains', [])))
+            ->where('local_part', '<>', 'catchall')
             ->where(function ($query): void {
                 // Newly staged mailboxes cannot be offered for sending until
                 // their inbound routes and sender authorization are checked.
                 // Existing production mailboxes without the flag are unchanged.
                 $query->whereNull('settings')
-                    ->orWhereRaw("CASE WHEN jsonb_exists(settings, 'outbound_enabled') THEN settings->'outbound_enabled' = 'true'::jsonb ELSE COALESCE(settings->'onboarding_pending', 'false'::jsonb) <> 'true'::jsonb END");
+                    ->orWhereRaw("COALESCE(settings->'catchall', 'false'::jsonb) <> 'true'::jsonb AND (CASE WHEN jsonb_exists(settings, 'outbound_enabled') THEN settings->'outbound_enabled' = 'true'::jsonb ELSE COALESCE(settings->'onboarding_pending', 'false'::jsonb) <> 'true'::jsonb END)");
             })
             ->orderBy('address')
             ->get(['id', 'address', 'display_name']);
@@ -124,7 +125,7 @@ class OutboundMailController
                 abort(409, 'This draft is already being sent, or its delivery status is uncertain. It cannot be submitted again.');
             }
             $mailbox = $this->mailbox((int) $draft->mailbox_id);
-            if (! OutboundSenderAuthorization::allowed($mailbox->settings)) {
+            if (! OutboundSenderAuthorization::allowed($mailbox->settings, $mailbox->local_part)) {
                 abort(403, 'This address is not authorized for outgoing mail.');
             }
             if (! OutboundMessageData::domainAllowed($mailbox->address)) {
@@ -237,7 +238,7 @@ class OutboundMailController
     private function mailbox(int $id): object
     {
         $mailbox = DB::table('mailboxes')->where('id', $id)
-            ->first(['id', 'address', 'display_name', 'settings']);
+            ->first(['id', 'address', 'local_part', 'display_name', 'settings']);
         if (! $mailbox) abort(404, 'Sender mailbox not found.');
         return $mailbox;
     }
