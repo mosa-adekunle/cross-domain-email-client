@@ -30,6 +30,8 @@ jobs:
         run: php backend/tests/attachment-smoke.php
       - name: Outbound email validation smoke tests
         run: php backend/tests/outbound-smoke.php
+      - name: Outbound sender permission and catch-all safety smoke tests
+        run: php backend/tests/outbound-sender-authorization-smoke.php
       - name: Approved brand mailbox inventory smoke tests
         run: php backend/tests/brand-mailboxes-smoke.php
       - name: Catch-all domain and importer integrity checks
