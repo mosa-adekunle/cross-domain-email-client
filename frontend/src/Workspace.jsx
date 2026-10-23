@@ -5,6 +5,7 @@ import { readMailLocation, mailLocationUrl, mailPageUrl, messagePageRange } from
 import { messageNavigationHighlight } from './messageHighlight.js';
 import { groupMailboxes } from './mailboxGroups.js';
 import { mailboxBrand } from './mailboxBrands.js';
+import { mailPageTitle } from './mailTitle.js';
 
 const folders = [
   { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
@@ -355,6 +356,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(() => readMailLocation(window.location.search).page);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [totalUnreadCount, setTotalUnreadCount] = useState(0);
   const [unreadRefreshKey, setUnreadRefreshKey] = useState(0);
   const onMessageRead = useCallback(() => setUnreadRefreshKey((value) => value + 1), []);
   const onMessageMutation = useCallback(() => setUnreadRefreshKey((value) => value + 1), []);
@@ -401,7 +403,10 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
       fetching = true;
       try {
         const response = await api('/messages/unread-count' + (params.size ? '?' + params.toString() : ''));
-        if (active) setUnreadCount(Math.max(0, Number(response.unread_count) || 0));
+        if (active) {
+          setUnreadCount(Math.max(0, Number(response.unread_count) || 0));
+          setTotalUnreadCount(Math.max(0, Number(response.total_unread_count ?? response.unread_count) || 0));
+        }
       } catch (err) {
         if (active && err.status === 401) onExpired();
         // Keep the last known count when the network is temporarily down.
@@ -410,7 +415,7 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
       }
     };
     checkUnread();
-    const timer = window.setInterval(checkUnread, 60_000);
+    const timer = window.setInterval(checkUnread, 30_000);
     const onVisible = () => { if (document.visibilityState === 'visible') checkUnread(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
@@ -419,6 +424,11 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [selectedMailbox, unreadRefreshKey, onExpired]);
+
+  useEffect(() => {
+    document.title = mailPageTitle(totalUnreadCount);
+    return () => { document.title = mailPageTitle(0); };
+  }, [totalUnreadCount]);
 
   useEffect(() => {
     // Browser Back / Forward restores the whole mail view, not only a message.
