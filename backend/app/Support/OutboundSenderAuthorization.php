@@ -12,7 +12,7 @@ namespace App\Support;
  */
 final class OutboundSenderAuthorization
 {
-    public static function allowed(?string $settings, ?string $localPart = null): bool
+    public static function allowed(?string $settings, ?string $localPart = null, ?string $domain = null): bool
     {
         // Catch-all inboxes are receiving containers, never sender identities.
         if (strtolower((string) $localPart) === 'catchall') {
@@ -20,7 +20,8 @@ final class OutboundSenderAuthorization
         }
 
         if ($settings === null || trim($settings) === '') {
-            return true;
+            // Newly approved Made North senders must each opt in explicitly.
+            return strtolower((string) $domain) !== 'madenorth.dev';
         }
 
         $flags = json_decode($settings, true);
@@ -30,6 +31,10 @@ final class OutboundSenderAuthorization
 
         if (($flags['catchall'] ?? false) === true) {
             return false;
+        }
+
+        if (strtolower((string) $domain) === 'madenorth.dev') {
+            return ($flags['outbound_enabled'] ?? null) === true;
         }
 
         if (array_key_exists('outbound_enabled', $flags)) {
