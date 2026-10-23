@@ -27,7 +27,7 @@ class OutboundMailController
                 // their inbound routes and sender authorization are checked.
                 // Existing production mailboxes without the flag are unchanged.
                 $query->whereNull('settings')
-                    ->orWhereRaw("CASE WHEN settings ? 'outbound_enabled' THEN settings->'outbound_enabled' = 'true'::jsonb ELSE COALESCE(settings->'onboarding_pending', 'false'::jsonb) <> 'true'::jsonb END");
+                    ->orWhereRaw("CASE WHEN jsonb_exists(settings, 'outbound_enabled') THEN settings->'outbound_enabled' = 'true'::jsonb ELSE COALESCE(settings->'onboarding_pending', 'false'::jsonb) <> 'true'::jsonb END");
             })
             ->orderBy('address')
             ->get(['id', 'address', 'display_name']);
