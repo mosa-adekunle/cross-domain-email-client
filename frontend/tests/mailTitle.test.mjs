@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { MAIL_BASE_TITLE, mailPageTitle, shouldPulseMailTitle } from '../src/mailTitle.js';
 
 test('Unread mail appears before the brand title', () => {
-  assert.equal(mailPageTitle(10), '(10 new) Mail - Made North Technologies');
-  assert.equal(mailPageTitle(1), '(1 new) Mail - Made North Technologies');
+  assert.equal(mailPageTitle(10), '🔴 (10 new) Mail - Made North Technologies');
+  assert.equal(mailPageTitle(1), '🔴 (1 new) Mail - Made North Technologies');
 });
 test('Zero and invalid counts restore the normal title', () => {
   for (const value of [0, -1, undefined, NaN, 'invalid']) {
@@ -12,10 +12,10 @@ test('Zero and invalid counts restore the normal title', () => {
   }
 });
 
-test('A subtle attention marker pulses while preserving the unread count', () => {
-  assert.equal(mailPageTitle(10, false), '(10 new) Mail - Made North Technologies');
-  assert.equal(mailPageTitle(10, true), '🔴 (10 new) Mail - Made North Technologies');
-  assert.equal(mailPageTitle(1, true), '🔴 (1 new) Mail - Made North Technologies');
+test('The attention marker alternates red and green while keeping the unread count visible', () => {
+  assert.equal(mailPageTitle(10, false), '🔴 (10 new) Mail - Made North Technologies');
+  assert.equal(mailPageTitle(10, true), '🟢 (10 new) Mail - Made North Technologies');
+  assert.equal(mailPageTitle(1, true), '🟢 (1 new) Mail - Made North Technologies');
   assert.equal(mailPageTitle(0, true), MAIL_BASE_TITLE);
 });
 

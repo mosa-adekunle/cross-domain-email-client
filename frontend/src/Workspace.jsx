@@ -431,9 +431,9 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
     let interval = null;
     let pulse = false;
 
-    // Browser tab titles cannot use CSS animation. Alternate a visible dot
-    // while keeping the unread count displayed in both phases. Background
-    // browsers may throttle the interval.
+    // Browser tab titles cannot use CSS animation. Alternate the red
+    // and green dots while keeping the unread count in both phases.
+    // Background browsers may throttle the interval.
     const updateMotion = () => {
       if (interval !== null) window.clearInterval(interval);
       interval = null;
