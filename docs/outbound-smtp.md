@@ -66,3 +66,49 @@ The existing authenticated web session and CSRF protection guard the endpoints: 
 ## AWS, Terraform and Cloudflare
 
 No new AWS IAM policies, security groups, inbound SMTP ports, Terraform resources, state changes, R2 write tokens, Cloudflare Workers or Email Routing modifications are required. The EC2 instance already permits outbound SMTP submission by security-group egress. Outbound sending is through an external authenticated SMTP service on port 587; no server port 25 is exposed. Keep provider API secrets out of Terraform state and GitHub.
+
+## Approving existing named senders (October 23, 2026)
+
+As verified directly in Resend on October 23, **receiptboss.ca** and **santasbag.ca** are verified for sending. **madenorth.dev** is still `not_started` and must remain unable to send; the other catch-all domains are not approved senders. Recheck provider status before operating, because verification can change.
+
+The explicitly approved sender inventory is in `backend/config/brand_mailboxes.php`:
+
+- ReceiptBoss: `sales@`, `legal@`, `privacy@`, `hello@receiptboss.ca`.
+- Santa's Bag: `sales@`, `legal@`, `privacy@`, `hello@santasbag.ca`.
+- Made North's `mosa@`, `hello@`, and `sales@madenorth.dev` remain **pending** until that domain is verified and a separate code change authorizes it.
+
+Existing `support@receiptboss.ca` and `inbox-test@receiptboss.ca` are unaffected. Catch-all inboxes are **never** valid senders. Inbound Cloudflare readiness does not prove outbound verification, and outbound approval never alters Gmail forwarding, inbox activation, DNS, Worker routes or R2.
+
+The new `settings.outbound_enabled` boolean is a separate authorization flag. Only eligible named mailboxes receive `outbound_enabled: true`. Their `onboarding_pending` and `is_active` settings are preserved unchanged. An explicit `outbound_enabled: false` revokes sending; older mailboxes without this flag retain their existing behavior unless they are catch-all mailboxes. The API and backend send action both enforce these rules.
+
+On the existing mail EC2 host (not ReceiptBoss EC2):
+
+```bash
+cd ~/cross-domain-email-client
+git pull --ff-only origin main
+
+# Edit only if needed. Keep the existing dedicated SMTP credentials; never print them.
+# Set OUTBOUND_ALLOWED_DOMAINS=receiptboss.ca,santasbag.ca in the private .env.
+sudo docker compose config --quiet
+sudo docker compose build api
+sudo docker compose up -d --no-deps --force-recreate api
+sudo docker compose exec -T api php artisan config:clear
+
+# Preview exactly what would change. Does not send email.
+sudo docker compose exec -T api php artisan mail:authorize-outbound
+
+# If any approved mailbox is missing, stage the known inventory first:
+# sudo docker compose exec -T api php artisan mail:provision-brand-mailboxes --apply
+# Then preview again before the following step.
+
+# Explicitly authorize the currently verified domains (DB flags only).
+sudo docker compose exec -T api php artisan mail:authorize-outbound --domain=receiptboss.ca --apply
+sudo docker compose exec -T api php artisan mail:authorize-outbound --domain=santasbag.ca --apply
+
+# Verify policy and deployment (no message sent).
+sudo docker compose exec -T api php tests/outbound-sender-authorization-smoke.php
+sudo docker compose ps api
+git log -1 --oneline
+```
+
+The authorization command intentionally fails with no partial modifications if the approved mailboxes are missing, the allowed-domain configuration is incomplete, or Resend SMTP is not configured. Do not bypass its safety checks, authorize catch-all addresses or add unverified domains to `OUTBOUND_ALLOWED_DOMAINS`. To verify success, sign in at `https://mail.madenorth.dev`, open Compose and confirm that named sender identities appear. Send one deliberate test email to an inbox you control, then check final provider delivery; nothing above sends a message automatically.
