@@ -154,6 +154,16 @@ def save_backup(snapshot):
 
 def apply(token, before, intended, replace_existing=False):
     helpers.check_local_mailboxes((DOMAIN,))
+    # Required exact-address mailboxes must exist before routing to the Worker.
+    # A scoped preview keeps other brands and their mailboxes untouched.
+    brand = subprocess.run(
+        ["sudo", "docker", "compose", "exec", "-T", "api", "php", "artisan",
+         "mail:provision-brand-mailboxes", "--domain=madenorth.dev"],
+        cwd=helpers.deploy.ROOT, check=True, capture_output=True, text=True,
+    )
+    if "0 mailbox(es) to stage" not in brand.stdout or "0 domain(s) to create" not in brand.stdout:
+        raise RuntimeError("Stage Made North's three explicit inboxes first: php artisan "
+                           "mail:provision-brand-mailboxes --domain=madenorth.dev --apply")
     # This read-only importer preflight verifies that the R2 bucket is accessible.
     subprocess.run(
         ["sudo", "docker", "compose", "exec", "-T", "api", "php", "artisan",

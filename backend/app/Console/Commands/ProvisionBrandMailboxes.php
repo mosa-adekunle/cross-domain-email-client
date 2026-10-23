@@ -16,7 +16,7 @@ use Throwable;
  */
 class ProvisionBrandMailboxes extends Command
 {
-    protected $signature = 'mail:provision-brand-mailboxes {--apply : Persist missing inactive mailboxes; otherwise preview only}';
+    protected $signature = 'mail:provision-brand-mailboxes {--apply : Persist missing inactive mailboxes; otherwise preview only} {--domain= : Limit provisioning to one approved domain}';
     protected $description = 'Stage the eleven approved business email addresses without changing delivery or sending';
 
     public function handle(): int
@@ -36,6 +36,17 @@ class ProvisionBrandMailboxes extends Command
                 $this->error('Approved mailbox manifest is incomplete or unexpectedly changed.');
                 return self::FAILURE;
             }
+        }
+
+        // Keep the full manifest validation above, but allow a single-domain
+        // rollout without creating mailboxes for other brands.
+        $selectedDomain = strtolower(trim((string) $this->option('domain')));
+        if ($selectedDomain !== '' && ! array_key_exists($selectedDomain, $manifest)) {
+            $this->error('The domain is not in the approved mailbox inventory.');
+            return self::FAILURE;
+        }
+        if ($selectedDomain !== '') {
+            $manifest = [$selectedDomain => $manifest[$selectedDomain]];
         }
 
         $apply = (bool) $this->option('apply');

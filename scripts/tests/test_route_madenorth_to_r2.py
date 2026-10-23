@@ -100,5 +100,24 @@ class MadeNorthR2Tests(unittest.TestCase):
         with patch.object(app.helpers.deploy, "api", side_effect=api):
             self.assertEqual(app.list_rules("redacted", ZONE), [])
 
+    def test_local_brand_mailbox_preview_blocks_incomplete_onboarding(self):
+        from subprocess import CompletedProcess
+        okay = CompletedProcess([], 0, stdout="Preview: 0 domain(s) to create, 0 mailbox(es) to stage.", stderr="")
+        pending = CompletedProcess([], 0, stdout="Preview: 0 domain(s) to create, 1 mailbox(es) to stage.", stderr="")
+        snapshot = state(WORKER, True, [rule(x) for x in app.ADDRESSES])
+        with patch.object(app.helpers, "check_local_mailboxes"), \
+             patch.object(app.subprocess, "run", return_value=pending), \
+             patch.object(app.helpers.deploy, "deploy_worker") as deploy:
+            with self.assertRaisesRegex(RuntimeError, "Stage Made North"):
+                app.apply("redacted", snapshot, app.plan(snapshot))
+            deploy.assert_not_called()
+        with patch.object(app.helpers, "check_local_mailboxes"), \
+             patch.object(app.subprocess, "run", side_effect=[okay, okay]), \
+             patch.object(app.helpers.deploy, "deploy_worker"), \
+             patch.object(app.helpers, "verify_live_worker"), \
+             patch.object(app, "inspect", return_value=snapshot), \
+             patch.object(app, "save_backup"):
+            app.apply("redacted", snapshot, app.plan(snapshot))
+
 if __name__ == "__main__":
     unittest.main()
