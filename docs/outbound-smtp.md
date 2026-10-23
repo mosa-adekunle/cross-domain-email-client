@@ -112,3 +112,62 @@ git log -1 --oneline
 ```
 
 The authorization command intentionally fails with no partial modifications if the approved mailboxes are missing, the allowed-domain configuration is incomplete, or Resend SMTP is not configured. Do not bypass its safety checks, authorize catch-all addresses or add unverified domains to `OUTBOUND_ALLOWED_DOMAINS`. To verify success, sign in at `https://mail.madenorth.dev`, open Compose and confirm that named sender identities appear. Send one deliberate test email to an inbox you control, then check final provider delivery; nothing above sends a message automatically.
+
+
+## Authorizing any specific named mailbox (October 23, 2026)
+
+The Compose **From** menu is populated from `GET /api/outbound/status`. It shows **every existing mailbox that is independently authorized for outbound sending on an allowed domain**, not just the fixed brand-mailbox inventory. An inbox does not need to be activated for *incoming* mail to be used for outbound sending. The backend validates the same permissions again when sending a draft, so the browser selector is not a security boundary.
+
+The `mail:authorize-outbound` command supports two workflows:
+
+- Existing bulk approvals: `--domain=receiptboss.ca` or `--domain=santasbag.ca`, restricted to the previously approved four named addresses in each brand manifest.
+- An individually chosen existing non-catch-all address, including a newly created one: `--address=billing@receiptboss.ca` (preview) and then `--address=billing@receiptboss.ca --apply`. This does **not** amend the manifest or enable other addresses.
+
+The address must already exist in the `mailboxes` table. If it does not, add it first in Mailbox Settings. The individual command does not create domains or mailboxes, change `is_active`, activate a forwarding rule, update DNS, or modify any other email address. Approval sets only that mailbox's JSON `settings.outbound_enabled=true`, preserving `settings.onboarding_pending`. Catch-all identities, including a mailbox marked as catch-all in settings, are rejected.
+
+Resend currently verifies **receiptboss.ca** and **santasbag.ca** for outbound delivery; `madenorth.dev` remains **not_started**. The CLI deliberately permits individual approvals only within the two verified domains, and its `--apply` mode requires live Resend SMTP configuration plus the same domain in the private `OUTBOUND_ALLOWED_DOMAINS` variable. It does not assume inbound verification proves sending eligibility. Check verification again before approval and update the code's verified-domain allowlist only after the provider has verified a new domain.
+
+### Deploy this backend-only change
+
+On the mail server, not the Made North website directory:
+
+```bash
+cd ~/cross-domain-email-client
+git pull --ff-only origin main
+
+# In the private .env, retain your existing dedicated SMTP credentials.
+# Make sure this setting includes both currently verified domains:
+# OUTBOUND_ALLOWED_DOMAINS=receiptboss.ca,santasbag.ca
+# If you edit .env, use nano .env and never echo its credentials.
+
+# Only the API source changed; do not rebuild the React frontend or database.
+sudo docker compose config --quiet
+sudo docker compose build api
+sudo docker compose up -d --no-deps --force-recreate api
+sudo docker compose exec -T api php artisan config:clear
+
+sudo docker compose exec -T api php tests/outbound-smoke.php
+sudo docker compose exec -T api php tests/outbound-sender-authorization-smoke.php
+sudo docker compose exec -T api php artisan mail:authorize-outbound --help
+sudo docker compose ps api
+```
+
+If you change **only** `.env` at a later time and do not pull new backend code, `sudo docker compose up -d --no-deps --force-recreate api` is enough; no image rebuild is needed.
+
+### Enable one chosen sender
+
+```bash
+cd ~/cross-domain-email-client
+
+# Preview: does not modify data or send any email.
+sudo docker compose exec -T api php artisan mail:authorize-outbound --address=billing@receiptboss.ca
+
+# After confirming that the exact mailbox exists and the domain is verified:
+sudo docker compose exec -T api php artisan mail:authorize-outbound --address=billing@receiptboss.ca --apply
+
+# Reopen Compose at https://mail.madenorth.dev to refresh its sender list.
+```
+
+Substitute the exact existing address you intend to send from. The per-address authorization command is idempotent: re-approving an already approved mailbox is a no-op. When a new mailbox is created in a currently approved domain, it still requires this explicit per-address approval; this is intentionally **not** a wildcard send-as privilege.
+
+To authorize the original eight predefined business addresses instead, continue using the previous `--domain=...` commands. The existing `support@receiptboss.ca` and `inbox-test@receiptboss.ca` pilot senders remain unchanged. Test one manually chosen email addressed to an inbox you control and confirm its provider delivery state; the CLI performs no sends.
