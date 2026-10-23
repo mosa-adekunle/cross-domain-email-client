@@ -5,7 +5,7 @@ import { readMailLocation, mailLocationUrl, mailPageUrl, messagePageRange } from
 import { messageNavigationHighlight } from './messageHighlight.js';
 import { groupMailboxes } from './mailboxGroups.js';
 import { mailboxBrand } from './mailboxBrands.js';
-import { mailPageTitle } from './mailTitle.js';
+import { mailPageTitle, shouldPulseMailTitle } from './mailTitle.js';
 
 const folders = [
   { label: 'Unified inbox', title: 'Inbox', folder: 'inbox', icon: 'inbox' },
@@ -426,8 +426,27 @@ export default function Workspace({ user, csrf, onLogout, signingOut, onExpired 
   }, [selectedMailbox, unreadRefreshKey, onExpired]);
 
   useEffect(() => {
-    document.title = mailPageTitle(totalUnreadCount);
-    return () => { document.title = mailPageTitle(0); };
+    const motionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    const reducedMotion = motionPreference?.matches === true;
+    const baseTitle = mailPageTitle(totalUnreadCount);
+    document.title = baseTitle;
+
+    // Browser tab titles cannot use CSS animation. Alternate a small, visible
+    // indicator while keeping the count in both states. The browser may
+    // throttle this timer when the tab is in the background.
+    if (!shouldPulseMailTitle(totalUnreadCount, reducedMotion)) {
+      return () => { document.title = mailPageTitle(0); };
+    }
+
+    let pulse = false;
+    const interval = window.setInterval(() => {
+      pulse = !pulse;
+      document.title = mailPageTitle(totalUnreadCount, pulse);
+    }, 1500);
+    return () => {
+      window.clearInterval(interval);
+      document.title = mailPageTitle(0);
+    };
   }, [totalUnreadCount]);
 
   useEffect(() => {
