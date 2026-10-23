@@ -84,10 +84,12 @@ final class AuthorizeOutboundMailboxes extends Command
 
         $updated = 0;
         $already = 0;
+        // Keep the chosen option distinct from the local $address used in each loop.
+        $selectedAddress = $address;
         try {
             // Fail and roll back as one unit if any named mailbox was not
             // provisioned yet. All existing routing and mailbox flags survive.
-            DB::transaction(function () use ($domains, $manifest, $apply, $address, $specificLocal, &$updated, &$already): void {
+            DB::transaction(function () use ($domains, $manifest, $apply, $selectedAddress, $specificLocal, &$updated, &$already): void {
                 foreach ($domains as $domainName) {
                     $domain = DB::table('mail_domains')->where('domain_name', $domainName)->first();
                     if (! $domain) {
@@ -95,7 +97,7 @@ final class AuthorizeOutboundMailboxes extends Command
                     }
                     // Explicit single-mailbox mode can approve a new named address.
                     // Bulk mode remains restricted to the established inventory.
-                    $entries = $address !== '' ? [$specificLocal => null] : $manifest[$domainName];
+                    $entries = $selectedAddress !== '' ? [$specificLocal => null] : $manifest[$domainName];
                     foreach ($entries as $local => $displayName) {
                         $address = $local.'@'.$domainName;
                         $mailbox = DB::table('mailboxes')->where('address', $address)->lockForUpdate()->first();
