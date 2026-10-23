@@ -102,3 +102,48 @@ The Worker rejects oversized messages above the Cloudflare Email Routing size li
 - Catch-all backup at `~/.config/cdec/owned-domain-catchalls-original.json` (file mode 0600).
 - Existing active forwarding and exact-address rules are never overwritten by catch-all rollout.
 - No changes to other zones, root website, TLS gateway, outbound email providers, or SMTP listener.
+
+## Complete Made North inbound routing (exact addresses + catch-all)
+
+When `madenorth.dev` Email Routing is ready and the root MX points to Cloudflare, use the domain-scoped `scripts/route-madenorth-to-r2.py` instead of relying on the catch-all alone. It audits every active exact-address routing rule, ensures `mosa@`, `hello@`, and `sales@` each target the `cdec-inbound-archive` Worker, and points all remaining recipients to the same Worker via catch-all. The Worker archives original MIME in the **existing private** `cdec-inbound-mail` R2 bucket, where the Laravel importer reads it. It never sends inbound mail through Resend.
+
+**Do not assume GitHub changes Cloudflare routing or DNS.** On the Cross Domain Email Client EC2 server, after deploying its current code and provisioning `catchall@madenorth.dev` **and** the three exact Made North inboxes, run:
+
+```bash
+cd ~/cross-domain-email-client
+python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+python3 scripts/configure-domain-catchalls.py --domain madenorth.dev --status
+python3 scripts/route-madenorth-to-r2.py
+```
+
+Only when Cloudflare reports Email Routing READY, the R2 importer is accessible, and the read-only preview shows no active conflicting forward destinations, apply:
+
+```bash
+python3 scripts/route-madenorth-to-r2.py --apply
+```
+
+If an **active** exact or catch-all rule forwards to Resend or any other destination, the helper refuses to change it without explicit approval. Check the existing forwarding destination, ensure you no longer depend on it, and inspect:
+
+```bash
+python3 scripts/route-madenorth-to-r2.py --replace-existing
+```
+
+To intentionally replace these rules and route **all** inbound addresses to R2:
+
+```bash
+python3 scripts/route-madenorth-to-r2.py --apply --replace-existing
+```
+
+The migration saves its initial rule snapshot in `~/.config/cdec/madenorth-inbound-before-r2.json` (mode 0600), runs Worker tests and deployment, rechecks routes before each change, and verifies the final exact/catch-all rules. Changes across multiple Cloudflare rules are not atomic; if interrupted, use the saved snapshot to review the changes rather than blindly deleting routes. It never modifies other zones, existing MX/DNS, root website, or outbound SMTP/Resend. Cloudflare Email Routing can only receive mail when the domain's **root MX** points to Cloudflare. If Cloudflare is not ready, follow the DNS preflight above before running this helper; do not remove an existing provider MX without planning the transition.
+
+After cutover, independently email `mosa@`, `hello@`, `sales@` and an arbitrary local part from a non-Made-North provider. Confirm corresponding new `.eml` objects in R2 `incoming/v2/`, import with `sudo docker compose exec -T api php artisan mail:sync-r2 --mode=incremental --limit=100`, and verify all four destinations appear in https://mail.madenorth.dev. The catch-all mailbox holds arbitrary local parts while preserving actual recipient metadata.
+
+To stage any missing Made North-specific mailboxes without touching the other brands, preview and then apply only to this domain:
+
+```bash
+sudo docker compose exec -T api php artisan mail:provision-brand-mailboxes --domain=madenorth.dev
+sudo docker compose exec -T api php artisan mail:provision-brand-mailboxes --domain=madenorth.dev --apply
+sudo docker compose exec -T api php artisan mail:provision-brand-mailboxes --domain=madenorth.dev
+```
+
+The final preview must show **0 domain(s) to create and 0 mailbox(es) to stage** before using `route-madenorth-to-r2.py --apply`. The same apply preflight also checks the private R2 importer's read-only access. The mailbox provisioning command never enables outbound SMTP or mail forwarding.
