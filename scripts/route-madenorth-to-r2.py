@@ -96,7 +96,7 @@ def is_echoed_catchall(rule, catchall):
 def exact_address_rules(snapshot):
     """Return only exact-address rules after strictly verifying wildcard echoes."""
     result = []
-    for rule in exact_address_rules(snapshot):
+    for rule in snapshot["rules"]:
         if is_echoed_catchall(rule, snapshot["catchall"]):
             continue
         matchers = rule.get("matchers") or []
@@ -125,7 +125,7 @@ def plan(snapshot, replace_existing=False):
     existing = {}
     changes = []
     disabled = set()
-    for rule in snapshot["rules"]:
+    for rule in exact_address_rules(snapshot):
         if not rule.get("enabled"):
             # Disabled explicit rules cannot receive mail but may prevent creating
             # the three approved identities. Do not silently skip them.
