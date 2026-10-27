@@ -1,18 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import {readFileSync} from 'node:fs';
 
-test('Mail favicon switches to the transparent white/red Made North logo in dark mode', () => {
-  const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const light = readFileSync(new URL('../public/favicon-made-north.svg', import.meta.url), 'utf8');
-  const dark = readFileSync(new URL('../public/favicon-made-north-dark-v1.svg', import.meta.url), 'utf8');
-  assert.match(index, /media="\(prefers-color-scheme: light\)" href="\/favicon-made-north\.svg"/);
-  assert.match(index, /media="\(prefers-color-scheme: dark\)" href="\/favicon-made-north-dark-v1\.svg"/);
-  assert.match(light, /<rect[^>]+fill="#fff"/);
-  assert.match(light, /viewBox="60 54 570 570"/);
-  assert.doesNotMatch(dark, /<rect\b/);
-  assert.equal((dark.match(/fill="#FFFFFF"/g) || []).length, 3);
-  assert.match(dark, /fill="#D50012"/);
-  assert.equal(dark, light.replace(/<rect x="60" y="54" width="570" height="570" rx="90" fill="#fff"\/>\n/, '\n')
-    .replaceAll('fill="#001220"', 'fill="#FFFFFF"'));
+test('Mail uses the unchanged original Made North favicon for all color schemes', () => {
+  const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const original = readFileSync(new URL('../public/favicon-made-north.svg', import.meta.url), 'utf8');
+  const links = [...page.matchAll(/<link\s+rel="icon"[^>]*>/g)];
+  assert.equal(links.length, 1, 'Only the original favicon should be selected');
+  assert.match(links[0][0], /href="\/favicon-made-north\.svg\?rev=original-20261027"/);
+  assert.doesNotMatch(page, /prefers-color-scheme|favicon-made-north-dark-v\d+\.svg/);
+  assert.match(original, /<rect[^>]+fill="#fff"/);
+  assert.match(original, /fill="#001220"/);
+  assert.match(original, /fill="#D50012"/);
 });
