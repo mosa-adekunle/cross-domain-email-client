@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<!-- Transparent favicon redrawn for clarity at 16x16; original mountain/diamond/maple symbolism retained. -->
+<path fill="#001220" d="M0 63 22 2 49 63H32L22 34 11 63Z M17 63 22 50 27 63Z"/>
+<path fill="#001220" d="M41 1 52 17 41 33 31 17Z"/>
+<path fill="#D50012" d="M49 20 55 29 63 24 60 35 65 39 59 44 63 52 54 50 54 62 48 62 49 51 38 54 40 45 30 40 40 35 36 24 46 30Z"/>
+</svg>
