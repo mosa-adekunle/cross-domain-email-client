@@ -19,7 +19,7 @@ class MessageActionController
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1', 'max:100'],
             'ids.*' => ['required', 'integer', 'min:1', 'distinct'],
-            'action' => ['required', Rule::in(['trash', 'restore', 'archive', 'unarchive', 'read', 'unread', 'star', 'unstar'])],
+            'action' => ['required', Rule::in(['trash', 'restore', 'archive', 'unarchive', 'read', 'unread', 'star', 'unstar', 'spam', 'not_spam', 'block_sender'])],
         ]);
 
         $action = $data['action'];
@@ -28,7 +28,7 @@ class MessageActionController
                 ->whereIn('id', $data['ids'])
                 ->whereNull('deleted_at')
                 ->lockForUpdate()
-                ->get(['id', 'folder', 'previous_folder', 'direction', 'delivery_status']);
+                ->get(['id', 'folder', 'previous_folder', 'direction', 'delivery_status', 'from_address']);
 
             if ($messages->count() !== count($data['ids'])) {
                 abort(404, 'One or more messages no longer exist. Refresh the list.');
@@ -50,7 +50,7 @@ class MessageActionController
                     case 'restore':
                         if ($message->folder !== 'trash') continue 2;
                         $original = $message->previous_folder;
-                        if (! in_array($original, ['inbox', 'sent', 'drafts', 'archive'], true)) {
+                        if (! in_array($original, ['inbox', 'sent', 'drafts', 'archive', 'spam'], true)) {
                             $original = $message->direction === 'incoming' ? 'inbox'
                                 : ($message->delivery_status === 'draft' ? 'drafts' : 'sent');
                         }
@@ -64,6 +64,32 @@ class MessageActionController
                     case 'unarchive':
                         if ($message->folder !== 'archive') continue 2;
                         $change['folder'] = 'inbox';
+                        break;
+                    case 'spam':
+                    case 'not_spam':
+                    case 'block_sender':
+                        if ($message->direction !== 'incoming' || $message->folder === 'trash') {
+                            abort(422, 'Spam actions apply only to incoming, non-deleted mail.');
+                        }
+                        if ($action === 'spam' && $message->folder === 'spam') continue 2;
+                        if ($action === 'not_spam' && $message->folder !== 'spam') continue 2;
+                        $change['folder'] = $action === 'not_spam' ? 'inbox' : 'spam';
+                        $change['is_spam'] = $action !== 'not_spam';
+                        $sender = strtolower(trim((string) $message->from_address));
+                        if ($action === 'block_sender') {
+                            if (! filter_var($sender, FILTER_VALIDATE_EMAIL)) abort(422, 'Sender address is missing.');
+                            DB::table('mail_sender_rules')->updateOrInsert(
+                                ['type' => 'address', 'value' => $sender],
+                                ['action' => 'block', 'updated_at' => $now, 'created_at' => $now]
+                            );
+                        } elseif (filter_var($sender, FILTER_VALIDATE_EMAIL)) {
+                            DB::table('mail_sender_feedback')->insertOrIgnore([
+                                'address' => $sender, 'spam_count' => 0, 'ham_count' => 0,
+                                'created_at' => $now, 'updated_at' => $now,
+                            ]);
+                            DB::table('mail_sender_feedback')->where('address', $sender)
+                                ->increment($action === 'spam' ? 'spam_count' : 'ham_count');
+                        }
                         break;
                     case 'read':
                     case 'unread':
@@ -89,6 +115,9 @@ class MessageActionController
             'unread' => 'Marked as unread.',
             'star' => 'Starred.',
             'unstar' => 'Unstarred.',
+            'spam' => 'Moved to Spam; future messages from this sender will receive a higher spam score.',
+            'not_spam' => 'Moved to Inbox; future messages from this sender will receive a lower spam score.',
+            'block_sender' => 'Sender blocked and message moved to Spam.',
         ];
 
         return response()->json(['message' => $labels[$action], 'updated' => $updated])

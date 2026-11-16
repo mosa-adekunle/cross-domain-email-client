@@ -179,6 +179,9 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
         <button type="button" className="message-back" onClick={onBack} title="Back to messages">← <span>Back</span></button>
         <div className="message-toolbar-actions">
           {message && message.folder === 'inbox' && <button type="button" className="message-back" disabled={actionBusy} title="Archive" onClick={() => moveMessage('archive')}>Archive</button>}
+          {message && message.folder === 'spam' && <button type="button" className="message-back" disabled={actionBusy} onClick={() => moveMessage('not_spam')}>Not spam</button>}
+          {message && message.direction === 'incoming' && message.folder !== 'spam' && message.folder !== 'trash' && <button type="button" className="message-back" disabled={actionBusy} onClick={() => moveMessage('spam')}>Mark spam</button>}
+          {message && message.direction === 'incoming' && message.folder !== 'trash' && <button type="button" className="message-back" disabled={actionBusy} onClick={() => moveMessage('block_sender')}>Block sender</button>}
           {message && message.folder === 'archive' && <button type="button" className="message-back" disabled={actionBusy} title="Move to Inbox" onClick={() => moveMessage('unarchive')}>Move to Inbox</button>}
           {message && <button type="button" className="message-back" disabled={actionBusy} title={message.folder === 'trash' ? 'Restore from Trash' : 'Move to Trash'} onClick={() => moveMessage(message.folder === 'trash' ? 'restore' : 'trash')}>{message.folder === 'trash' ? 'Restore' : 'Delete'}</button>}
           {message && <button type="button" className="message-back" onClick={() => onReply(message)}>↩ Reply</button>}
@@ -202,6 +205,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
             )}
             <div className="message-header-mailbox"><dt>Mailbox</dt><dd>{message.mailbox_address}</dd></div>
           </dl>
+          {message.folder === 'spam' && <div className="message-view-notice" role="status">Quarantined as suspicious. {message.spam_assessment?.spam_reasons?.join('; ') || 'Sender marked as spam.'} Original preserved in R2.</div>}
           <div className="message-body">
 
             <div className="message-text">{message.body || ((message.attachments || []).length ? 'This message has attachments but no readable text body.' : 'This email has no readable text body.')}</div>

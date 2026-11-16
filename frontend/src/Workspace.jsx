@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import MessageReader from './MessageReader.jsx';
+import MailProtectionSettings from './MailProtectionSettings.jsx';
 import ComposeMail from './ComposeMail.jsx';
 import { readMailLocation, mailLocationUrl, mailPageUrl, messagePageRange } from './mailLocation.js';
 import { messageNavigationHighlight } from './messageHighlight.js';
@@ -12,6 +13,7 @@ const folders = [
   { label: 'Sent', title: 'Sent', folder: 'sent', icon: 'sent' },
   { label: 'Drafts', title: 'Drafts', folder: 'drafts', icon: 'drafts' },
   { label: 'Archive', title: 'Archive', folder: 'archive', icon: 'archive' },
+  { label: 'Spam', title: 'Spam', folder: 'spam', icon: 'spam' },
   { label: 'Trash', title: 'Trash', folder: 'trash', icon: 'trash' },
   { label: 'Settings', title: 'Settings', folder: 'settings', icon: 'settings' },
 ];
@@ -22,6 +24,7 @@ const iconPaths = {
   drafts: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5',
   archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
   trash: 'M3 6h18M8 6V4h8v2M5 6l1 15h12l1-15M10 10v7M14 10v7',
+  spam: 'M12 3l10 18H2L12 3zm0 6v5m0 3v1',
   restore: 'M3 12a9 9 0 1 0 3-7M3 3v6h6M12 7v5l4 3',
   mail: 'M3 5h18v14H3zM3 6l9 7 9-7',
   mailopen: 'M3 10l9-7 9 7v10H3V10zm0 0 9 7 9-7',
@@ -171,6 +174,7 @@ function DomainSettings({ domains, mailboxes, refresh, csrf, onExpired }) {
           </ul>
         )}
       </section>
+      <MailProtectionSettings mailboxes={mailboxes} csrf={csrf} onExpired={onExpired}/>
       {error && <div className="form-alert error" role="alert">{error}</div>}
       {success && <div className="form-alert success" role="status">{success}</div>}
       <p className="notice">Adding domains or mailboxes here does not change Cloudflare MX records, create R2 buckets, or send a message. Outbound sending is enabled separately by verified SMTP credentials on the server.</p>
@@ -293,6 +297,8 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, page, onPage
           <>
             <span className="mail-selection-count">{selectedIds.length} selected</span>
             {folder === 'inbox' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('archive', selectedIds)}><MailIcon name="archive" size={17} />Archive</button>}
+            {folder === 'spam' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('not_spam', selectedIds)}><MailIcon name="inbox" size={17} />Not spam</button>}
+            {folder === 'inbox' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('spam', selectedIds)}><MailIcon name="spam" size={17} />Spam</button>}
             {folder === 'archive' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('unarchive', selectedIds)}><MailIcon name="inbox" size={17} />Move to Inbox</button>}
             {folder !== 'trash' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('trash', selectedIds)}><MailIcon name="trash" size={17} />Delete</button>}
             {folder === 'trash' && <button className="mail-toolbar-action" type="button" disabled={busy} onClick={() => doAction('restore', selectedIds)}><MailIcon name="restore" size={17} />Restore</button>}
@@ -305,7 +311,7 @@ function MessagesPanel({ folder, mailboxes, selectedMailbox, query, page, onPage
       {notice && <div className="mail-inline-notice" role="status">{notice}</div>}
       {error && <div className="mail-error"><div className="form-alert error" role="alert">{error}</div><button type="button" className="compose-secondary" onClick={() => setRefreshKey((value) => value + 1)}>Try again</button></div>}
       {loading ? <div className="empty"><p>Loading messages…</p></div> : !error && messages.length === 0 ? (
-        <div className="empty"><div className="empty-icon"><MailIcon name={folder === 'trash' ? 'trash' : 'inbox'} size={34} /></div><h3>{query ? 'No matching messages' : folder === 'trash' ? 'Trash is empty' : 'Your mailbox is clear'}</h3><p>{query ? 'Try a different search in this folder.' : folder === 'trash' ? 'Messages you delete will be moved here.' : 'Messages will appear here when they arrive.'}</p></div>
+        <div className="empty"><div className="empty-icon"><MailIcon name={folder === 'trash' ? 'trash' : folder === 'spam' ? 'spam' : 'inbox'} size={34} /></div><h3>{query ? 'No matching messages' : folder === 'trash' ? 'Trash is empty' : folder === 'spam' ? 'Spam is empty' : 'Your mailbox is clear'}</h3><p>{query ? 'Try a different search in this folder.' : folder === 'trash' ? 'Messages you delete will be moved here.' : folder === 'spam' ? 'Suspicious messages will appear here for review.' : 'Messages will appear here when they arrive.'}</p></div>
       ) : !error && (
         <>
           <div className="message-list">

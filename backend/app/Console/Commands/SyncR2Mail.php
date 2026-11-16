@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 use ZBateson\MailMimeParser\Message;
+use App\Support\SpamClassifier;
 
 class SyncR2Mail extends Command
 {
@@ -196,7 +197,7 @@ class SyncR2Mail extends Command
     {
         return DB::table('incoming_objects')
             ->where('object_identity_sha256', $identity)
-            ->where('processing_status', 'processed')->exists();
+            ->whereIn('processing_status', ['processed', 'ignored'])->exists();
     }
 
     private function attemptImport(S3Client $client, string $bucket, string $key, string $identity, int $size): bool
@@ -246,6 +247,20 @@ class SyncR2Mail extends Command
         }
         $mailbox = DB::table('mailboxes')->where('address', $recipient)->first();
         if (! $mailbox) {
+            $alias = DB::table('mail_aliases')->where('address', $recipient)->where('is_active', true)->first();
+            if ($alias) $mailbox = DB::table('mailboxes')->where('id', $alias->mailbox_id)->where('is_active', true)->first();
+        }
+        if (! $mailbox && in_array(substr(strrchr($recipient, '@'), 1), config('spam.strict_recipient_domains', []), true)) {
+            // Keep the original MIME archived in R2, not visible in catch-all.
+            DB::table('incoming_objects')->insertOrIgnore([
+                'object_identity_sha256' => $identity, 'r2_bucket' => $bucket,
+                'r2_object_key' => $key, 'size_bytes' => $size,
+                'processing_status' => 'ignored', 'received_at' => now(),
+                'processed_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            return;
+        }
+        if (! $mailbox) {
             // Accept unknown local parts only for the explicitly owned domains.
             // Keep the actual envelope recipient for display, search and audit;
             // do not invent thousands of mailboxes for spam or typos.
@@ -271,6 +286,9 @@ class SyncR2Mail extends Command
         $plain = (string) ($parsed->getTextContent() ?? '');
         if ($plain === '') $plain = strip_tags((string) ($parsed->getHtmlContent() ?? ''));
         $preview = mb_substr(trim(preg_replace('/\s+/u', ' ', $plain) ?? ''), 0, 500);
+        $classification = SpamClassifier::classify((string) ($sender['email'] ?? ''), $subject, $plain,
+            (string) ($parsed->getHeaderValue('Authentication-Results') ?? ''));
+        $folder = $classification['spam'] ? 'spam' : 'inbox';
         $receivedAt = (string) ($metadata['received_at'] ?? now()->toIso8601String());
         try {
             $date = \Illuminate\Support\Carbon::parse($receivedAt);
@@ -278,7 +296,7 @@ class SyncR2Mail extends Command
             $date = now();
         }
 
-        DB::transaction(function () use ($bucket, $key, $identity, $mailbox, $recipient, $subject, $messageId, $replyToId, $fromAddress, $fromName, $preview, $raw, $date): void {
+        DB::transaction(function () use ($bucket, $key, $identity, $mailbox, $recipient, $subject, $messageId, $replyToId, $fromAddress, $fromName, $preview, $raw, $date, $classification, $folder): void {
             $now = now();
             DB::table('incoming_objects')->insertOrIgnore([
                 'object_identity_sha256' => $identity,
@@ -314,7 +332,7 @@ class SyncR2Mail extends Command
                 'mail_thread_id' => $threadId,
                 'incoming_object_id' => $object->id,
                 'direction' => 'incoming',
-                'folder' => 'inbox',
+                'folder' => $folder,
                 'internet_message_id' => $messageId !== '' ? $messageId : null,
                 'in_reply_to' => $replyToId !== '' ? $replyToId : null,
                 'from_address' => $fromAddress, 'from_name' => $fromName,
@@ -323,7 +341,8 @@ class SyncR2Mail extends Command
                 'received_at' => $date,
                 'is_read' => false,
                 'is_starred' => false,
-                'is_spam' => false,
+                'is_spam' => $classification['spam'],
+                'headers_metadata' => json_encode(['spam_score' => $classification['score'], 'spam_reasons' => $classification['reasons']], JSON_THROW_ON_ERROR),
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);

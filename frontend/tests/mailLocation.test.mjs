@@ -9,7 +9,7 @@ test('defaults to Inbox when folder is missing or invalid', () => {
 });
 
 test('restores all mail folders after browser refresh', () => {
-  for (const folder of ['inbox', 'sent', 'drafts', 'archive', 'trash', 'settings']) {
+  for (const folder of ['inbox', 'sent', 'drafts', 'archive', 'spam', 'trash', 'settings']) {
     const url = mailLocationUrl('https://mail.madenorth.dev/?utm_source=chatgpt.com', { folder, mailboxId: '' });
     const reloaded = new URL(url, 'https://mail.madenorth.dev');
     assert.equal(readMailLocation(reloaded.search).folder, folder);

@@ -1,7 +1,7 @@
 // Mail location is stored in the URL so browser refresh and history
 // navigation preserve the chosen folder and mailbox. Keep unrelated query
 // parameters intact (including links carrying marketing parameters).
-export const mailFolderIds = Object.freeze(['inbox', 'sent', 'drafts', 'archive', 'trash', 'settings']);
+export const mailFolderIds = Object.freeze(['inbox', 'sent', 'drafts', 'archive', 'spam', 'trash', 'settings']);
 
 export function readMailLocation(search) {
   const params = new URLSearchParams(search);

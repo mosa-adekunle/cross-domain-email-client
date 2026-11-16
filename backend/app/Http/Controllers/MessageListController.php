@@ -32,7 +32,7 @@ class MessageListController
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
-            'folder' => ['sometimes', Rule::in(['inbox', 'sent', 'drafts', 'archive', 'trash'])],
+            'folder' => ['sometimes', Rule::in(['inbox', 'sent', 'drafts', 'archive', 'trash', 'spam'])],
             'mailbox_id' => ['nullable', 'integer', Rule::exists('mailboxes', 'id')],
             'page' => ['sometimes', 'integer', 'min:1', 'max:10000'],
             'q' => ['sometimes', 'nullable', 'string', 'max:120'],
@@ -43,7 +43,7 @@ class MessageListController
             ->join('mailboxes as b', 'b.id', '=', 'm.mailbox_id')
             ->where('m.folder', $folder)
             ->whereNull('m.deleted_at')
-            ->select('m.id', 'm.mailbox_id', 'b.address as mailbox_address', 'm.direction', 'm.folder', 'm.from_address', 'm.from_name', 'm.delivery_status', 'm.subject', 'm.preview_text', 'm.received_at', 'm.sent_at', 'm.is_read', 'm.is_starred', 'm.created_at')
+            ->select('m.id', 'm.mailbox_id', 'b.address as mailbox_address', 'm.direction', 'm.folder', 'm.from_address', 'm.from_name', 'm.delivery_status', 'm.subject', 'm.preview_text', 'm.received_at', 'm.sent_at', 'm.is_read', 'm.is_starred', 'm.is_spam', 'm.created_at')
             ->selectSub(function ($sub) {
                 $sub->from('mail_recipients as r')->whereColumn('r.mail_message_id', 'm.id')
                     ->where('r.type', 'to')->selectRaw("string_agg(r.address, ', ')");

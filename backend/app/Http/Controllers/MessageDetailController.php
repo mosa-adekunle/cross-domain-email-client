@@ -26,7 +26,7 @@ class MessageDetailController
             ->select(
                 'm.id', 'm.mailbox_id', 'b.address as mailbox_address', 'm.folder',
                 'm.from_address', 'm.from_name', 'm.subject', 'm.preview_text',
-                'm.received_at', 'm.sent_at', 'm.created_at', 'm.is_read',
+                'm.received_at', 'm.sent_at', 'm.created_at', 'm.is_read', 'm.is_spam', 'm.headers_metadata',
                 'm.draft_body_text', 'm.draft_body_html', 'm.incoming_object_id',
                 'm.internet_message_id', 'm.in_reply_to', 'm.delivery_status', 'm.direction',
                 'o.r2_bucket', 'o.r2_object_key', 'o.size_bytes'
@@ -102,6 +102,8 @@ class MessageDetailController
                 'sent_at' => $message->sent_at,
                 'created_at' => $message->created_at,
                 'is_read' => (bool) $message->is_read,
+                'is_spam' => (bool) $message->is_spam,
+                'spam_assessment' => json_decode((string) ($message->headers_metadata ?? '{}'), true) ?: [],
                 'body' => $body,
                 'body_truncated' => $truncated,
                 'attachments' => $attachments,
