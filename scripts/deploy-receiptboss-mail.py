@@ -27,9 +27,13 @@ TOKEN_FILE = Path.home() / ".config" / "cdec" / "cloudflare-worker-token"
 
 def validate_source():
     data = json.loads((WORKER_DIR / "wrangler.jsonc").read_text())
-    allow = data.get("vars", {}).get("ALLOWED_RECIPIENTS", "").split(",")
+    # The Worker accepts addresses on explicitly owned domains, so its
+    # public Wrangler configuration must not publish individual mailboxes.
+    allowed_domains = set(data.get("vars", {}).get("ALLOWED_DOMAINS", "").split(","))
     assert data["name"] == WORKER_NAME, "Wrong Worker name"
-    assert all(address in allow for address in (PILOT, *ADDRESSES)), "Missing approved recipient"
+    assert "receiptboss.ca" in allowed_domains, "ReceiptBoss routing domain missing"
+    assert all(address.rsplit("@", 1)[-1] in allowed_domains for address in (PILOT, *ADDRESSES)), "Missing approved recipient domain"
+    assert not data.get("vars", {}).get("ALLOWED_RECIPIENTS", ""), "Mailbox roster must not be published in Worker vars"
     assert data.get("vars", {}).get("LEGACY_FORWARD_RECIPIENTS") == "legal@receiptboss.ca,privacy@receiptboss.ca", "Legacy forwarding not configured"
     assert "LEGACY_FORWARD_DESTINATION" not in data["vars"], "Gmail destination must remain a Cloudflare secret"
     assert {"binding": "MAIL_ARCHIVE", "bucket_name": "cdec-inbound-mail"} in data.get("r2_buckets", []), "Unexpected R2 bucket binding"
