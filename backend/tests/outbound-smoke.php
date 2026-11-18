@@ -3,6 +3,17 @@
 require dirname(__DIR__).'/vendor/autoload.php';
 
 use App\Support\OutboundMessageData as Data;
+use App\Support\SafeMailHtml;
+
+$unsafe = '<p style="color:#224466" onclick="alert(1)">Hello <a href="https://example.com" onclick="alert(1)">website</a><img src="javascript:alert(1)" onerror="alert(1)"><script>alert(1)</script></p>';
+$safe = SafeMailHtml::sanitize($unsafe);
+if (class_exists(\DOMDocument::class)) {
+    if (! str_contains($safe, 'href="https://example.com"') || str_contains($safe, 'onclick')
+        || str_contains($safe, 'javascript:') || str_contains($safe, '<script')) {
+        throw new RuntimeException('Outbound HTML sanitization failed.');
+    }
+}
+
 
 function check(bool $value, string $label): void
 {
