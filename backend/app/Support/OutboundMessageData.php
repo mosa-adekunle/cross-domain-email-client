@@ -31,6 +31,7 @@ final class OutboundMessageData
             'bcc' => $bcc,
             'subject' => trim((string) ($input['subject'] ?? '')),
             'body_text' => (string) ($input['body_text'] ?? ''),
+            'body_html' => SafeMailHtml::sanitize((string) ($input['body_html'] ?? '')),
             'in_reply_to' => self::singleMessageId((string) ($input['in_reply_to'] ?? '')),
         ];
     }
@@ -59,7 +60,7 @@ final class OutboundMessageData
         if (count($to) + count($cc) + count($bcc) > (int) config('outbound.max_recipients', 30)) {
             throw ValidationException::withMessages(['to' => 'Too many recipients for one email.']);
         }
-        if (trim((string) $data['body_text']) === '' && trim((string) $data['subject']) === '') {
+        if (trim((string) $data['body_text']) === '' && trim((string) ($data['body_html'] ?? '')) === '' && trim((string) $data['subject']) === '') {
             throw ValidationException::withMessages(['body_text' => 'Write a subject or message before sending.']);
         }
     }
