@@ -28,6 +28,8 @@ jobs:
         run: composer install --working-dir=backend --no-interaction --no-progress --prefer-dist --no-dev
       - name: MIME attachment decode and security smoke tests
         run: php backend/tests/attachment-smoke.php
+      - name: HTML email styling and sandbox sanitization smoke tests
+        run: php backend/tests/html-preview-smoke.php
       - name: Spam content heuristic smoke tests
         run: php backend/tests/spam-classifier-smoke.php
       - name: Outbound email validation smoke tests
