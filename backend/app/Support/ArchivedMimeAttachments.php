@@ -34,6 +34,7 @@ final class ArchivedMimeAttachments
                 'content_type' => $mime ?: 'application/octet-stream',
                 'size_bytes' => $size !== null && $size >= 0 ? $size : null,
                 'is_inline' => strtolower((string) $part->getContentDisposition()) === 'inline',
+                'content_id' => trim((string) ($part->getHeaderValue('Content-ID') ?? ''), ' <>\t\r\n'),
                 'can_preview' => in_array($mime, self::VIEWABLE_TYPES, true),
             ];
         }
