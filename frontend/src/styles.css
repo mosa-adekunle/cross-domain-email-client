@@ -1067,3 +1067,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mailbox-domain-group .mailbox-link.selected,
 .mailbox-domain-group .mailbox-link.selected:hover { color: #174ea6; }
 .mailbox-domain-group .mailbox-link.selected { box-shadow: inset 3px 0 var(--mailbox-brand); }
+
+/* Untrusted email HTML is isolated in a sandboxed iframe, never in the app DOM. */
+.message-rich-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; font-size: 12px; color: #61738e; }
+.message-rich-controls button { background: #fff; border: 1px solid #cbd7ed; color: #365cb5; border-radius: 7px; padding: 7px 12px; cursor: pointer; }
+.message-rich-frame { display: block; width: 100%; height: min(68vh, 740px); min-height: 340px; border: 1px solid #e1e8f2; border-radius: 6px; background: #fff; }
+.message-text a { color: #315bc8; text-decoration: underline; overflow-wrap: anywhere; }
