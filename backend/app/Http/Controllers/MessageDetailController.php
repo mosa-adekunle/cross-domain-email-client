@@ -44,6 +44,7 @@ class MessageDetailController
         $bcc = $recipients->where('type', 'bcc')->pluck('address')->implode(', ');
         $from = trim((string) ($message->from_name ?? '')) ?: (string) ($message->from_address ?? '');
         $body = (string) ($message->draft_body_text ?? '');
+        $bodyHtml = (string) ($message->draft_body_html ?? '');
         $attachments = [];
 
         if ($message->incoming_object_id !== null) {
@@ -51,6 +52,7 @@ class MessageDetailController
                 $raw = $this->readArchive($message);
                 $parsed = Message::from($raw, false);
                 $attachments = ArchivedMimeAttachments::listing($parsed);
+                $bodyHtml = (string) ($parsed->getHtmlContent() ?? '');
                 $body = (string) ($parsed->getTextContent() ?? '');
                 if (trim($body) === '') {
                     $body = $this->htmlToText((string) ($parsed->getHtmlContent() ?? ''));
@@ -70,7 +72,10 @@ class MessageDetailController
             $body = $this->htmlToText((string) ($message->draft_body_html ?? ''));
         }
 
-        // Bound the response; the original MIME and attachments remain in R2.
+        // Bound both versions; render HTML only in an isolated sandbox on the client.
+        // Never return an unbounded sender-controlled HTML payload.
+        $htmlTruncated = mb_strlen($bodyHtml, 'UTF-8') > 500000;
+        if ($htmlTruncated) $bodyHtml = '';
         $truncated = mb_strlen($body, 'UTF-8') > 500000;
         if ($truncated) {
             $body = mb_substr($body, 0, 500000, 'UTF-8');
@@ -105,7 +110,9 @@ class MessageDetailController
                 'is_spam' => (bool) $message->is_spam,
                 'spam_assessment' => json_decode((string) ($message->headers_metadata ?? '{}'), true) ?: [],
                 'body' => $body,
+                'body_html' => $bodyHtml,
                 'body_truncated' => $truncated,
+                'html_truncated' => $htmlTruncated,
                 'attachments' => $attachments,
             ],
         ])->header('Cache-Control', 'no-store');
