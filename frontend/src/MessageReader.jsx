@@ -210,7 +210,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
           <div className="message-body">
 
             {message.body_html && !message.html_truncated ? (
-              <EmailHtmlBody html={message.body_html} attachments={message.attachments || []} messageId={messageId} onExpired={onExpired} />
+              <EmailHtmlBody messageId={messageId} plainText={message.body} />
             ) : (
               <div className="message-text"><LinkedPlainText text={message.body || ((message.attachments || []).length ? 'This message has attachments but no readable text body.' : 'This email has no readable text body.')} /></div>
             )}
