@@ -68,8 +68,16 @@ class MessageDetailController
                 return response()->json(['message' => 'Unable to retrieve the archived email. Please try again.'], 502)
                     ->header('Cache-Control', 'no-store');
             }
-        } elseif ($body === '') {
-            $body = $this->htmlToText((string) ($message->draft_body_html ?? ''));
+        } else {
+            $attachments = DB::table('outbound_attachment_blobs')->where('mail_message_id', $id)
+                ->orderBy('id')->get(['id', 'filename', 'content_type', 'size_bytes'])
+                ->map(fn ($file) => [
+                    'index' => $file->id, 'filename' => $file->filename,
+                    'content_type' => $file->content_type, 'size_bytes' => $file->size_bytes,
+                    'is_inline' => false, 'content_id' => null,
+                    'can_preview' => in_array($file->content_type, ['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain'], true),
+                ])->all();
+            if ($body === '') $body = $this->htmlToText($bodyHtml);
         }
 
         // Bound both versions; render HTML only in an isolated sandbox on the client.
@@ -123,9 +131,43 @@ class MessageDetailController
     {
         // Route is under auth:web, and deleted / unknown messages are 404.
         // Never accept an R2 object key, filename or bucket from the browser.
-        if ($index < 0 || $index >= ArchivedMimeAttachments::MAX_ATTACHMENTS) {
-            abort(404, 'Attachment not found.');
+        if ($index < 0) abort(404, 'Attachment not found.');
+
+        // Sent messages and drafts store their own attachment bytes in PostgreSQL.
+        // The client uses their database ID as the attachment index.
+        $outgoing = DB::table('mail_messages')->where('id', $id)->whereNull('deleted_at')
+            ->whereNull('incoming_object_id')->first(['id']);
+        if ($outgoing) {
+            $file = DB::selectOne(
+                "SELECT filename, content_type, encode(content, 'base64') AS encoded_content FROM outbound_attachment_blobs WHERE mail_message_id = ? AND id = ?",
+                [$id, $index]
+            );
+            if (! $file) abort(404, 'Attachment not found.');
+            $bytes = base64_decode((string) $file->encoded_content, true);
+            if ($bytes === false) abort(502, 'Unable to read attachment.');
+            $isPreview = request()->query('preview') === '1';
+            $safeMime = ArchivedMimeAttachments::previewMime((string) $file->content_type, $bytes);
+            if ($isPreview && $safeMime === null) {
+                return response()->json(['message' => 'This file cannot be previewed safely. Use Download instead.'], 415)
+                    ->header('Cache-Control', 'no-store');
+            }
+            $name = ArchivedMimeAttachments::filename((string) $file->filename, 0);
+            $disposition = HeaderUtils::makeDisposition(
+                $isPreview ? ResponseHeaderBag::DISPOSITION_INLINE : ResponseHeaderBag::DISPOSITION_ATTACHMENT,
+                $name, ArchivedMimeAttachments::asciiFilename($name)
+            );
+            return response($bytes, 200, [
+                'Content-Type' => $isPreview ? $safeMime : 'application/octet-stream',
+                'Content-Disposition' => $disposition,
+                'Content-Length' => (string) strlen($bytes),
+                'Cache-Control' => 'private, no-store, max-age=0',
+                'X-Content-Type-Options' => 'nosniff',
+                'Cross-Origin-Resource-Policy' => 'same-origin',
+                'Referrer-Policy' => 'no-referrer',
+                'Content-Security-Policy' => "sandbox; default-src 'none'",
+            ]);
         }
+        if ($index >= ArchivedMimeAttachments::MAX_ATTACHMENTS) abort(404, 'Attachment not found.');
 
         $item = DB::table('mail_messages as m')
             ->join('incoming_objects as o', 'o.id', '=', 'm.incoming_object_id')
