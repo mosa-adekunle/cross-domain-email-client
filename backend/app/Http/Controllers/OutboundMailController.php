@@ -150,6 +150,7 @@ class OutboundMailController
             OutboundMessageData::validateReady([
                 'to' => $to, 'cc' => $cc, 'bcc' => $bcc,
                 'subject' => $draft->subject, 'body_text' => $draft->draft_body_text,
+                'body_html' => $draft->draft_body_html,
             ]);
             $domain = substr($mailbox->address, strrpos($mailbox->address, '@') + 1);
             $internetId = '<'.Str::uuid().'@'.$domain.'>';
