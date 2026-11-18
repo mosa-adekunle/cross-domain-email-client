@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\ArchivedMimeAttachments;
+use App\Support\ArchivedHtmlPreview;
 use App\Support\OutboundMessageData;
 use App\Support\SenderIdentity;
 use Aws\S3\S3Client;
@@ -126,6 +127,78 @@ class MessageDetailController
         ])->header('Cache-Control', 'no-store');
     }
 
+
+
+    /**
+     * This is a document navigation, NOT a JSON API. The separate HTTP response
+     * gives the isolated iframe an email-specific CSP; srcdoc would inherit and
+     * therefore be blocked by the main application's restrictive style-src.
+     */
+    public function htmlPreview(int $id): SymfonyResponse
+    {
+        $this->requireAdminForPreview();
+
+        $item = DB::table('mail_messages as m')
+            ->leftJoin('incoming_objects as o', 'o.id', '=', 'm.incoming_object_id')
+            ->where('m.id', $id)->whereNull('m.deleted_at')
+            ->select('m.id', 'm.incoming_object_id', 'm.draft_body_html',
+                'o.r2_bucket', 'o.r2_object_key', 'o.size_bytes')
+            ->first();
+        if (! $item) abort(404, 'Message not found.');
+
+        $html = (string) ($item->draft_body_html ?? '');
+        $cidImages = [];
+        try {
+            if ($item->incoming_object_id !== null) {
+                $parsed = Message::from($this->readArchive($item), false);
+                $html = (string) ($parsed->getHtmlContent() ?? '');
+                $total = 0;
+                foreach (ArchivedMimeAttachments::parts($parsed) as $part) {
+                    $cid = strtolower(trim((string) ($part->getHeaderValue('Content-ID') ?? ''), " <>\t\r\n"));
+                    $mime = strtolower(trim((string) $part->getContentType()));
+                    if ($cid === '' || ! in_array($mime, ['image/png', 'image/jpeg', 'image/gif', 'image/webp'], true)) continue;
+                    if (count($cidImages) >= 12 || $total >= 4 * 1024 * 1024) break;
+                    $reported = $part->getBinaryContentStream()?->getSize();
+                    if ($reported !== null && $reported > 1024 * 1024) continue;
+                    $bytes = ArchivedMimeAttachments::decodedBytes($part);
+                    if (strlen($bytes) > 1024 * 1024 ||
+                        ArchivedMimeAttachments::previewMime($mime, $bytes) !== $mime) continue;
+                    $total += strlen($bytes);
+                    if ($total > 4 * 1024 * 1024) break;
+                    $cidImages[$cid] = 'data:'.$mime.';base64,'.base64_encode($bytes);
+                }
+            }
+        } catch (Throwable $error) {
+            report($error);
+            abort(502, 'Unable to retrieve the archived email.');
+        }
+
+        if ($html === '' || mb_strlen($html, 'UTF-8') > 500000) {
+            abort(404, 'HTML version is not available.');
+        }
+
+        $showImages = request()->query('images') === '1';
+        $imageSources = $showImages ? 'data: https:' : 'data:';
+        $csp = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; ".
+            "img-src {$imageSources}; font-src 'none'; connect-src 'none'; ".
+            "object-src 'none'; frame-src 'none'; form-action 'none'; ".
+            "base-uri 'none'; frame-ancestors 'self'; ".
+            "sandbox allow-popups allow-popups-to-escape-sandbox";
+
+        return response(ArchivedHtmlPreview::render($html, $cidImages, $showImages), 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Security-Policy' => $csp,
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+            'Referrer-Policy' => 'no-referrer',
+        ]);
+    }
+
+    private function requireAdminForPreview(): void
+    {
+        $user = request()->user('web');
+        abort_unless($user && $user->is_admin && $user->is_active, 403, 'Administrator access required.');
+    }
 
     public function attachment(int $id, int $index): SymfonyResponse
     {
