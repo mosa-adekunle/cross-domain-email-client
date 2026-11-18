@@ -19,7 +19,9 @@ function safeDocument(html, allowImages, inlineImages) {
   parsed.querySelectorAll('img').forEach(img => {
     const src = (img.getAttribute('src') || '').trim();
     if (/^cid:/i.test(src)) {
-      const key = decodeURIComponent(src.slice(4)).replace(/^<|>$/g, '').toLowerCase();
+      let key = src.slice(4);
+      try { key = decodeURIComponent(key); } catch { /* Invalid sender CID; leave image disabled. */ }
+      key = key.replace(/^<|>$/g, '').toLowerCase();
       if (inlineImages[key]) img.setAttribute('src', inlineImages[key]);
       else img.removeAttribute('src');
     } else if (/^https?:\/\//i.test(src)) {
