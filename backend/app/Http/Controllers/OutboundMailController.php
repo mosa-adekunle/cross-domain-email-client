@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\OutboundDraftMail;
+use App\Support\ArchivedMimeAttachments;
 use App\Support\OutboundMessageData;
 use App\Support\OutboundSenderAuthorization;
 use Illuminate\Http\JsonResponse;
@@ -59,7 +61,7 @@ class OutboundMailController
                 'direction' => 'draft', 'folder' => 'drafts',
                 'from_address' => $mailbox->address, 'from_name' => $this->senderName($mailbox),
                 'subject' => $data['subject'], 'preview_text' => mb_substr($data['body_text'], 0, 220),
-                'draft_body_text' => $data['body_text'], 'in_reply_to' => $data['in_reply_to'],
+                'draft_body_text' => $data['body_text'], 'draft_body_html' => $data['body_html'], 'in_reply_to' => $data['in_reply_to'],
                 'delivery_status' => 'draft', 'is_read' => true,
                 'created_at' => $now, 'updated_at' => $now,
             ]);
@@ -87,7 +89,7 @@ class OutboundMailController
                 'mailbox_id' => $mailbox->id,
                 'from_address' => $mailbox->address, 'from_name' => $this->senderName($mailbox),
                 'subject' => $data['subject'], 'preview_text' => mb_substr($data['body_text'], 0, 220),
-                'draft_body_text' => $data['body_text'], 'in_reply_to' => $data['in_reply_to'],
+                'draft_body_text' => $data['body_text'], 'draft_body_html' => $data['body_html'], 'in_reply_to' => $data['in_reply_to'],
                 'delivery_status' => 'draft', 'updated_at' => now(),
             ]);
             $this->storeRecipients($id, $data);
@@ -108,6 +110,7 @@ class OutboundMailController
             DB::table('mail_messages')->where('id', $id)->update([
                 'deleted_at' => now(), 'updated_at' => now(),
             ]);
+            DB::table('outbound_attachment_blobs')->where('mail_message_id', $id)->delete();
         });
         return response()->json(['message' => 'Draft deleted.'])
             ->header('Cache-Control', 'no-store');
@@ -160,21 +163,23 @@ class OutboundMailController
                 'status' => 'sending', 'attempted_at' => $stamp,
                 'created_at' => $stamp, 'updated_at' => $stamp,
             ]);
-            return compact('draft', 'mailbox', 'to', 'cc', 'bcc', 'internetId', 'attempt');
+            $files = DB::select("SELECT filename, content_type, encode(content, 'base64') AS encoded_content FROM outbound_attachment_blobs WHERE mail_message_id = ? ORDER BY id", [$id]);
+            return compact('draft', 'mailbox', 'to', 'cc', 'bcc', 'internetId', 'attempt', 'files');
         });
 
         try {
-            Mail::mailer('smtp')->raw((string) $outbound['draft']->draft_body_text, function ($mail) use ($outbound): void {
-                $mail->from($outbound['mailbox']->address, $this->senderName($outbound['mailbox']))
-                    ->to($outbound['to'])
-                    ->subject((string) ($outbound['draft']->subject ?? ''));
-                if ($outbound['cc']) $mail->cc($outbound['cc']);
-                if ($outbound['bcc']) $mail->bcc($outbound['bcc']);
-                $headers = $mail->getSymfonyMessage()->getHeaders();
-                $headers->addIdHeader('Message-ID', trim($outbound['internetId'], '<>'));
-                $replyId = OutboundMessageData::singleMessageId((string) ($outbound['draft']->in_reply_to ?? ''));
-                if ($replyId) $headers->addIdHeader('In-Reply-To', trim($replyId, '<>'));
-            });
+            $draftMail = new OutboundDraftMail(
+                (string) ($outbound['draft']->draft_body_html ?? ''),
+                (string) ($outbound['draft']->draft_body_text ?? ''),
+                $outbound['files'],
+                $outbound['internetId'],
+                OutboundMessageData::singleMessageId((string) ($outbound['draft']->in_reply_to ?? ''))
+            );
+            $draftMail->from($outbound['mailbox']->address, $this->senderName($outbound['mailbox']))
+                ->to($outbound['to'])->subject((string) ($outbound['draft']->subject ?? ''));
+            if ($outbound['cc']) $draftMail->cc($outbound['cc']);
+            if ($outbound['bcc']) $draftMail->bcc($outbound['bcc']);
+            Mail::mailer('smtp')->send($draftMail);
         } catch (Throwable $error) {
             // After the SMTP attempt begins, an exception does NOT establish
             // that delivery failed. SMTP may accept DATA then drop the connection.
@@ -216,6 +221,56 @@ class OutboundMailController
         ])->header('Cache-Control', 'no-store');
     }
 
+    public function uploadAttachment(Request $request, int $id): JsonResponse
+    {
+        $this->requireAdmin();
+        $request->validate(['file' => ['required', 'file', 'max:5120']]);
+        $file = $request->file('file');
+        $bytes = file_get_contents($file->getRealPath());
+        if ($bytes === false || strlen($bytes) === 0) {
+            throw ValidationException::withMessages(['file' => 'The attachment is empty or unreadable.']);
+        }
+        $filename = ArchivedMimeAttachments::filename($file->getClientOriginalName(), 0);
+        $mime = strtolower((string) ($file->getMimeType() ?: 'application/octet-stream'));
+        if (! preg_match('~^[a-z0-9.+-]+/[a-z0-9.+-]+$~', $mime)) $mime = 'application/octet-stream';
+        $result = DB::transaction(function () use ($id, $bytes, $filename, $mime): object {
+            $draft = DB::table('mail_messages')->where('id', $id)->whereNull('deleted_at')
+                ->lockForUpdate()->first(['direction', 'folder', 'delivery_status']);
+            if (! $draft || $draft->direction !== 'draft' || $draft->folder !== 'drafts' || $draft->delivery_status !== 'draft') {
+                abort(409, 'This draft cannot be modified.');
+            }
+            $count = DB::table('outbound_attachment_blobs')->where('mail_message_id', $id)->count();
+            $total = DB::table('outbound_attachment_blobs')->where('mail_message_id', $id)->sum('size_bytes');
+            if ($count >= 8 || $total + strlen($bytes) > 15 * 1024 * 1024) {
+                throw ValidationException::withMessages(['file' => 'Limit: 8 attachments, 5 MB each, 15 MB total.']);
+            }
+            return DB::selectOne(
+                "INSERT INTO outbound_attachment_blobs (mail_message_id, filename, content_type, size_bytes, content, created_at, updated_at) VALUES (?, ?, ?, ?, decode(?, 'base64'), ?, ?) RETURNING id",
+                [$id, $filename, $mime, strlen($bytes), base64_encode($bytes), now(), now()]
+            );
+        });
+        return response()->json([
+            'attachment' => ['id' => $result->id, 'index' => $result->id, 'filename' => $filename,
+                'content_type' => $mime, 'size_bytes' => strlen($bytes),
+                'is_inline' => false, 'can_preview' => in_array($mime, ['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain'], true)],
+        ], 201)->header('Cache-Control', 'no-store');
+    }
+
+    public function deleteAttachment(int $id, int $attachmentId): JsonResponse
+    {
+        $this->requireAdmin();
+        DB::transaction(function () use ($id, $attachmentId): void {
+            $draft = DB::table('mail_messages')->where('id', $id)->whereNull('deleted_at')
+                ->lockForUpdate()->first(['direction', 'folder', 'delivery_status']);
+            if (! $draft || $draft->direction !== 'draft' || $draft->folder !== 'drafts' || $draft->delivery_status !== 'draft') {
+                abort(409, 'This draft cannot be modified.');
+            }
+            $removed = DB::table('outbound_attachment_blobs')->where('mail_message_id', $id)->where('id', $attachmentId)->delete();
+            if (! $removed) abort(404, 'Attachment not found.');
+        });
+        return response()->json(['message' => 'Attachment removed.'])->header('Cache-Control', 'no-store');
+    }
+
     private function validatedDraft(Request $request): array
     {
         $v = $request->validate([
@@ -228,6 +283,7 @@ class OutboundMailController
             'bcc.*' => ['required', 'string', 'email:rfc', 'max:320'],
             'subject' => ['nullable', 'string', 'max:998', 'not_regex:/[\\r\\n]/'],
             'body_text' => ['nullable', 'string', 'max:262144'],
+            'body_html' => ['nullable', 'string', 'max:262144'],
             'in_reply_to' => ['nullable', 'string', 'max:998'],
         ]);
         $v['subject'] = $v['subject'] ?? '';
