@@ -214,7 +214,7 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
             ) : (
               <div className="message-text"><LinkedPlainText text={message.body || ((message.attachments || []).length ? 'This message has attachments but no readable text body.' : 'This email has no readable text body.')} /></div>
             )}
-            {message.html_truncated && <p className="message-truncated">The HTML version was too large to display safely. Showing plain text instead.</p>
+            {message.html_truncated && <p className="message-truncated">The HTML version was too large to display safely. Showing plain text instead.</p>}
             {message.body_truncated && <p className="message-truncated">Long message shortened for display; the original archived email is intact.</p>}
           </div>
           {(message.attachments || []).length > 0 && (
