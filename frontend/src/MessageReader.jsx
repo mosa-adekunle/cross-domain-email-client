@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import EmailHtmlBody, { LinkedPlainText } from './EmailHtmlBody.jsx';
 
 // Load the PDF parser only when someone actually opens a PDF preview.
 const PdfAttachmentPreview = React.lazy(() => import('./PdfAttachmentPreview.jsx'));
@@ -208,7 +209,12 @@ export default function MessageReader({ messageId, csrf, onBack, onExpired, onRe
           {message.folder === 'spam' && <div className="message-view-notice" role="status">Quarantined as suspicious. {message.spam_assessment?.spam_reasons?.join('; ') || 'Sender marked as spam.'} Original preserved in R2.</div>}
           <div className="message-body">
 
-            <div className="message-text">{message.body || ((message.attachments || []).length ? 'This message has attachments but no readable text body.' : 'This email has no readable text body.')}</div>
+            {message.body_html && !message.html_truncated ? (
+              <EmailHtmlBody html={message.body_html} attachments={message.attachments || []} messageId={messageId} onExpired={onExpired} />
+            ) : (
+              <div className="message-text"><LinkedPlainText text={message.body || ((message.attachments || []).length ? 'This message has attachments but no readable text body.' : 'This email has no readable text body.')} /></div>
+            )}
+            {message.html_truncated && <p className="message-truncated">The HTML version was too large to display safely. Showing plain text instead.</p>
             {message.body_truncated && <p className="message-truncated">Long message shortened for display; the original archived email is intact.</p>}
           </div>
           {(message.attachments || []).length > 0 && (
