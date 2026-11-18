@@ -50,6 +50,8 @@ Route::middleware('web')->group(function (): void {
         Route::post('/drafts', [OutboundMailController::class, 'createDraft'])->middleware('throttle:60,1');
         Route::patch('/drafts/{id}', [OutboundMailController::class, 'updateDraft'])->whereNumber('id')->middleware('throttle:60,1');
         Route::delete('/drafts/{id}', [OutboundMailController::class, 'deleteDraft'])->whereNumber('id');
+        Route::post('/drafts/{id}/attachments', [OutboundMailController::class, 'uploadAttachment'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::delete('/drafts/{id}/attachments/{attachmentId}', [OutboundMailController::class, 'deleteAttachment'])->whereNumber('id')->whereNumber('attachmentId');
         Route::post('/drafts/{id}/send', [OutboundMailController::class, 'sendDraft'])->whereNumber('id')->middleware('throttle:10,1');
         Route::get('/messages/unread-count', [MessageListController::class, 'unreadCount']);
         Route::post('/messages/actions', [MessageActionController::class, 'bulk'])->middleware('throttle:60,1');
