@@ -70,6 +70,44 @@ final class ArchivedHtmlPreview
         }
     }
 
+    /**
+     * Email templates may use protocol-relative or HTTP-only URL syntax even
+     * though the viewer itself is HTTPS. Normalize them to secure URLs instead
+     * of deleting the image and leaving only the alt text.
+     */
+    private static function imageSource(string $value, array $cidImages, bool $showExternalImages): ?string
+    {
+        $value = trim($value);
+        if ($value === '' || preg_match('/[\\x00-\\x1F\\x7F]/', $value)) return null;
+
+        if (stripos($value, 'cid:') === 0) {
+            $id = strtolower(trim(rawurldecode(substr($value, 4)), " <>\\t\\r\\n"));
+            return $cidImages[$id] ?? null;
+        }
+
+        if (preg_match('~^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$~iD', $value)) {
+            return strlen($value) <= 1600000 ? $value : null;
+        }
+
+        if (! $showExternalImages || strlen($value) > 4096) return null;
+
+        if (str_starts_with($value, '//')) {
+            $value = 'https:'.$value;
+        } elseif (stripos($value, 'http://') === 0) {
+            $value = 'https://'.substr($value, 7);
+        }
+
+        if (preg_match('~^https://[^/\\s?#]+(?:[/?#][^\\s]*)?$~iD', $value) !== 1) {
+            return null;
+        }
+
+        $host = parse_url($value, PHP_URL_HOST);
+        if (! is_string($host) || $host === '') return null;
+        // Reject URL-embedded credentials to avoid misleading image hosts.
+        if (parse_url($value, PHP_URL_USER) !== null) return null;
+        return $value;
+    }
+
     private static function clean(DOMElement $element, array $cidImages, bool $showExternalImages): void
     {
         $tag = strtolower($element->tagName);
@@ -114,30 +152,27 @@ final class ArchivedHtmlPreview
 
             if ($name === 'src') {
                 if ($tag !== 'img') {
-                    $element->removeAttributeNode($attribute);
+                    $element->removeAttribute('src');
                     continue;
                 }
-
-                if (stripos($value, 'cid:') === 0) {
-                    $cid = strtolower(trim(rawurldecode(substr($value, 4)), " <>\t\r\n"));
-                    if (isset($cidImages[$cid])) {
-                        $element->setAttribute('src', $cidImages[$cid]);
-                    } else {
-                        $element->removeAttribute('src');
+                $safe = self::imageSource($value, $cidImages, $showExternalImages);
+                if ($safe === null && $element->hasAttribute('srcset')) {
+                    // Some modern email layouts provide only srcset, with a
+                    // placeholder src. Keep the first secure candidate.
+                    $set = (string) $element->getAttribute('srcset');
+                    if (preg_match('~(?:https?:)?//[^\\s,]+~i', $set, $match) === 1) {
+                        $safe = self::imageSource($match[0], $cidImages, $showExternalImages);
                     }
-                } elseif (preg_match('~^https://~i', $value) !== 1 &&
-                    preg_match('~^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$~iD', $value) !== 1) {
-                    $element->removeAttribute('src');
-                } elseif (stripos($value, 'https://') === 0 && ! $showExternalImages) {
-                    $element->removeAttribute('src');
-                } elseif (strlen($value) > 1600000) {
-                    $element->removeAttribute('src');
                 }
+                if ($safe === null) $element->removeAttribute('src');
+                else $element->setAttribute('src', $safe);
                 continue;
             }
 
             if ($name === 'background') {
-                if ($showExternalImages && preg_match('~^https://~i', $value) === 1) {
+                $safe = self::imageSource($value, $cidImages, $showExternalImages);
+                if ($safe !== null) {
+                    $element->setAttribute('background', $safe);
                     continue;
                 }
                 $element->removeAttribute('background');
