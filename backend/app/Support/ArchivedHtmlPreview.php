@@ -131,6 +131,7 @@ final class ArchivedHtmlPreview
             ) ?? '';
         }
 
+        $originalSrcset = $tag === 'img' ? (string) $element->getAttribute('srcset') : '';
         foreach (iterator_to_array($element->attributes) as $attribute) {
             $name = strtolower($attribute->name);
             $value = trim($attribute->value);
@@ -156,14 +157,6 @@ final class ArchivedHtmlPreview
                     continue;
                 }
                 $safe = self::imageSource($value, $cidImages, $showExternalImages);
-                if ($safe === null && $element->hasAttribute('srcset')) {
-                    // Some modern email layouts provide only srcset, with a
-                    // placeholder src. Keep the first secure candidate.
-                    $set = (string) $element->getAttribute('srcset');
-                    if (preg_match('~(?:https?:)?//[^\\s,]+~i', $set, $match) === 1) {
-                        $safe = self::imageSource($match[0], $cidImages, $showExternalImages);
-                    }
-                }
                 if ($safe === null) $element->removeAttribute('src');
                 else $element->setAttribute('src', $safe);
                 continue;
@@ -177,6 +170,14 @@ final class ArchivedHtmlPreview
                 }
                 $element->removeAttribute('background');
             }
+        }
+
+        // An image may have no src at all: Gmail-compatible templates often
+        // rely solely on srcset. Resolve after stripping all untrusted attrs.
+        if ($tag === 'img' && ! $element->hasAttribute('src') && $originalSrcset !== '' &&
+            preg_match('~(?:https?:)?//[^\\s,]+~i', $originalSrcset, $candidate) === 1) {
+            $safe = self::imageSource($candidate[0], $cidImages, $showExternalImages);
+            if ($safe !== null) $element->setAttribute('src', $safe);
         }
 
         if ($tag === 'a') {
