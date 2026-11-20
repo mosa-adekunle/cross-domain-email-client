@@ -154,7 +154,7 @@ class MessageDetailController
                 $html = (string) ($parsed->getHtmlContent() ?? '');
                 $total = 0;
                 foreach (ArchivedMimeAttachments::parts($parsed) as $part) {
-                    $cid = strtolower(trim((string) ($part->getHeaderValue('Content-ID') ?? ''), " <>\t\r\n"));
+                    $cid = strtolower(trim((string) ($part->getContentId() ?: $part->getHeaderValue('Content-ID') ?: ''), " <>\t\r\n"));
                     $mime = strtolower(trim((string) $part->getContentType()));
                     if ($cid === '' || ! in_array($mime, ['image/png', 'image/jpeg', 'image/gif', 'image/webp'], true)) continue;
                     if (count($cidImages) >= 12 || $total >= 4 * 1024 * 1024) break;
