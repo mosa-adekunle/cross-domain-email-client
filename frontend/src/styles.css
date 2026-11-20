@@ -1071,7 +1071,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Untrusted email HTML is isolated in a sandboxed iframe, never in the app DOM. */
 .message-rich-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; font-size: 12px; color: #61738e; }
 .message-rich-controls button { background: #fff; border: 1px solid #cbd7ed; color: #365cb5; border-radius: 7px; padding: 7px 12px; cursor: pointer; }
-.message-rich-frame { display: block; width: 100%; height: clamp(560px, 76dvh, 980px); border: 1px solid #e1e8f2; border-radius: 7px; background: #fff; }
+.message-rich-frame { display: block; width: 100%; min-height: 320px; border: 0; border-radius: 0; background: #fff; }
 .message-text a { color: #315bc8; text-decoration: underline; overflow-wrap: anywhere; }
 
 /* Rich compose toolbar and editor */
@@ -1091,3 +1091,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .message-image-status { color: #67748a; }
 .message-plain-fallback { min-height: 300px; padding: 16px 4px; }
 @media (max-width: 700px) { .message-rich-frame { height: max(480px, 68dvh); } }
+
+.message-open-full { color: #315bc8; text-decoration: none; border: 1px solid #cbd7ed; border-radius: 7px; padding: 7px 12px; }
+.message-open-full:hover { background: #edf2ff; }
