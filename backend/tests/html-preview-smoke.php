@@ -28,7 +28,9 @@ verifyHtml(str_contains($blocked, 'style="color:#345678"'), 'inline styles prese
 verifyHtml(str_contains($blocked, 'bgcolor="#eeeeee"'), 'email table colors preserved');
 verifyHtml(str_contains($blocked, 'href="https://example.com/start"'), 'safe links preserved');
 verifyHtml(str_contains($blocked, 'target="_blank"'), 'links open outside the sandbox');
-verifyHtml(! str_contains($blocked, '<script'), 'script removed');
+verifyHtml(! str_contains($blocked, 'window.parent.hacked'), 'sender script removed');
+verifyHtml(str_contains($blocked, "data-mail-resize=\"1\""), 'only trusted resize script inserted');
+verifyHtml(str_contains($blocked, ArchivedHtmlPreview::resizeScript()), 'trusted measurement script retained');
 verifyHtml(! str_contains($blocked, 'onclick='), 'event handlers removed');
 verifyHtml(! str_contains($blocked, 'javascript:'), 'unsafe URI removed');
 verifyHtml(! str_contains($blocked, '<iframe'), 'nested iframe removed');
