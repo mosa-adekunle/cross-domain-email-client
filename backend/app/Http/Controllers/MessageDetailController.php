@@ -179,11 +179,15 @@ class MessageDetailController
 
         $showImages = request()->query('images') === '1';
         $imageSources = $showImages ? 'data: https:' : 'data:';
-        $csp = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; ".
-            "img-src {$imageSources}; font-src 'none'; connect-src 'none'; ".
+        $fontSources = $showImages ? 'https: data:' : "'none'";
+        $scriptHash = base64_encode(hash('sha256', ArchivedHtmlPreview::resizeScript(), true));
+        // Only the trusted height-reporting script may run. Sender scripts were
+        // already stripped. The iframe remains on an opaque sandbox origin.
+        $csp = "default-src 'none'; script-src 'sha256-{$scriptHash}'; style-src 'unsafe-inline'; ".
+            "img-src {$imageSources}; font-src {$fontSources}; connect-src 'none'; ".
             "object-src 'none'; frame-src 'none'; form-action 'none'; ".
             "base-uri 'none'; frame-ancestors 'self'; ".
-            "sandbox allow-popups allow-popups-to-escape-sandbox";
+            "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox";
 
         return response(ArchivedHtmlPreview::render($html, $cidImages, $showImages), 200, [
             'Content-Type' => 'text/html; charset=UTF-8',
