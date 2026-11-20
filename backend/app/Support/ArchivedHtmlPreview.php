@@ -78,10 +78,10 @@ final class ArchivedHtmlPreview
     private static function imageSource(string $value, array $cidImages, bool $showExternalImages): ?string
     {
         $value = trim($value);
-        if ($value === '' || preg_match('/[\\x00-\\x1F\\x7F]/', $value)) return null;
+        if ($value === '' || preg_match('/[\x00-\x1F\x7F]/', $value)) return null;
 
         if (stripos($value, 'cid:') === 0) {
-            $id = strtolower(trim(rawurldecode(substr($value, 4)), " <>\\t\\r\\n"));
+            $id = strtolower(trim(rawurldecode(substr($value, 4)), " <>\t\r\n"));
             return $cidImages[$id] ?? null;
         }
 
@@ -97,7 +97,7 @@ final class ArchivedHtmlPreview
             $value = 'https://'.substr($value, 7);
         }
 
-        if (preg_match('~^https://[^/\\s?#]+(?:[/?#][^\\s]*)?$~iD', $value) !== 1) {
+        if (preg_match('~^https://[^/\s?#]+(?:[/?#][^\s]*)?$~iD', $value) !== 1) {
             return null;
         }
 
@@ -175,7 +175,7 @@ final class ArchivedHtmlPreview
         // An image may have no src at all: Gmail-compatible templates often
         // rely solely on srcset. Resolve after stripping all untrusted attrs.
         if ($tag === 'img' && ! $element->hasAttribute('src') && $originalSrcset !== '' &&
-            preg_match('~(?:https?:)?//[^\\s,]+~i', $originalSrcset, $candidate) === 1) {
+            preg_match('~(?:https?:)?//[^\s,]+~i', $originalSrcset, $candidate) === 1) {
             $safe = self::imageSource($candidate[0], $cidImages, $showExternalImages);
             if ($safe !== null) $element->setAttribute('src', $safe);
         }
