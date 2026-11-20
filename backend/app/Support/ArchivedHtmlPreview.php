@@ -8,6 +8,18 @@ use DOMNode;
 
 final class ArchivedHtmlPreview
 {
+    // This is the only JavaScript permitted in the HTML preview.
+    // It reports the document's natural height; it does not inspect message
+    // contents, fetch resources, or change the top-level application.
+    public static function resizeScript(): string
+    {
+        return "(function(){function report(){var b=document.body,d=document.documentElement;".
+            "if(!b||!d)return;var h=Math.max(b.scrollHeight,b.offsetHeight,d.scrollHeight,d.offsetHeight);".
+            "parent.postMessage({type:'madenorth-email-height',height:Math.ceil(h)},'*');}".
+            "if(window.ResizeObserver){new ResizeObserver(report).observe(document.body);}".
+            "window.addEventListener('load',report);report();})();";
+    }
+
     /**
      * Render external email HTML as an inert, separately sandboxed document.
      * The HTTP response supplies its own strict CSP instead of inheriting the
@@ -39,6 +51,16 @@ final class ArchivedHtmlPreview
                     'img{max-width:100%;height:auto}table{max-width:100%}a{color:#1967d2}'
                 ));
                 $head->insertBefore($style, $head->firstChild);
+            }
+
+            // Add a single integrity-hashed script after removing sender scripts.
+            // The iframe has an opaque origin (never allow-same-origin).
+            $body = $document->getElementsByTagName('body')->item(0);
+            if ($body instanceof DOMElement) {
+                $resize = $document->createElement('script');
+                $resize->setAttribute('data-mail-resize', '1');
+                $resize->appendChild($document->createTextNode(self::resizeScript()));
+                $body->appendChild($resize);
             }
 
             return $document->saveHTML() ?: '<!doctype html><html><body>Email could not be displayed.</body></html>';
