@@ -47,7 +47,7 @@ final class ArchivedHtmlPreview
             if ($head instanceof DOMElement) {
                 $style = $document->createElement('style');
                 $style->appendChild($document->createTextNode(
-                    'html,body{min-height:100%;margin:0}body{padding:16px;overflow-wrap:anywhere;color:#202124;font:14px/1.5 Arial,Helvetica,sans-serif}'.
+                    'html,body{margin:0}body{padding:0;overflow-wrap:anywhere;color:#202124;font:14px/1.5 Arial,Helvetica,sans-serif}'.
                     'img{max-width:100%;height:auto}table{max-width:100%}a{color:#1967d2}'
                 ));
                 $head->insertBefore($style, $head->firstChild);
