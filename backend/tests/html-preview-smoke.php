@@ -41,4 +41,22 @@ verifyHtml(str_contains($blocked, 'data:image/png;base64,AAAA'), 'CID image rewr
 $allowed = ArchivedHtmlPreview::render($html, $inline, true);
 verifyHtml(str_contains($allowed, 'src="https://images.example/logo.png"'), 'remote image loads only on request');
 
+
+// HTML email logo compatibility: older templates use HTTP/protocol-relative
+// images; modern templates may specify only srcset.
+$logoSamples = '<html><body>'.
+    '<img alt="Google AdSense" src="http://www.gstatic.com/example/adsense-logo.png">'.
+    '<img alt="Google" src="//www.gstatic.com/example/google-logo.png">'.
+    '<img alt="Responsive logo" srcset="https://www.gstatic.com/example/logo@2x.png 2x">'.
+    '<img alt="Blocked script image" src="javascript:alert(1)">'.
+    '</body></html>';
+$allowedLogos = ArchivedHtmlPreview::render($logoSamples, [], true);
+verifyHtml(str_contains($allowedLogos, 'src="https://www.gstatic.com/example/adsense-logo.png"'), 'HTTP logo upgraded to HTTPS');
+verifyHtml(str_contains($allowedLogos, 'src="https://www.gstatic.com/example/google-logo.png"'), 'protocol-relative Google logo upgraded');
+verifyHtml(str_contains($allowedLogos, 'src="https://www.gstatic.com/example/logo@2x.png"'), 'srcset-only logo resolved');
+verifyHtml(! str_contains($allowedLogos, 'javascript:'), 'unsafe logo source denied');
+$privateLogos = ArchivedHtmlPreview::render($logoSamples, [], false);
+verifyHtml(! str_contains($privateLogos, 'https://www.gstatic.com/example/adsense-logo.png'), 'external logos blocked when disabled');
+verifyHtml(! str_contains($privateLogos, 'https://www.gstatic.com/example/google-logo.png'), 'protocol-relative logos blocked when disabled');
+
 echo "Isolated HTML email preview smoke tests passed.\n";
